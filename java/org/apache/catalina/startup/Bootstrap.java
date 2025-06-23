@@ -120,6 +120,8 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
      */
     private static final Object daemonLock = new Object(); // 同步锁对象，用于保护daemon实例的访问
     /**
+     * 类级静态变量（全类共享）,在main方法中通过new Bootstrap()创建,Tomcat 启动的 "引导器"，负责初始化和流程控制,daemon创建并持有catalinaDaemon
+     *
      * 如果daemon没有被声明为 volatile，可能会出现以下问题：
      *
      * 指令重排序问题：
@@ -202,6 +204,8 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
     // -------------------------------------------------------------- 变量定义
 
     /**
+     * 实例级变量（每个Bootstrap实例独有）,在init()方法中通过反射创建Catalina实例,Tomcat 容器的 "核心引擎"，负责业务逻辑实现,catalinaDaemon依赖daemon的类加载器配置
+     *
      * 守护进程引用，catalinaDaemon是 Tomcat 核心启动类Catalina的实例，负责管理容器的生命周期
      * 虽然catalinaDaemon不是操作系统进程，但 Tomcat 确实可以作为系统服务运行：通过systemd、init.d脚本将 Tomcat 注册为系统服务
      * 这些实现方式将 Tomcat 进程注册为系统服务，使其具备守护进程的特性，但这是通过外部脚本或工具实现的，而非catalinaDaemon变量直接控制。
