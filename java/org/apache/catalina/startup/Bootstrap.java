@@ -56,6 +56,19 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
      *
      */
     private static final Object daemonLock = new Object(); // 同步锁对象，用于保护daemon实例的访问
+    /**
+     * 如果daemon没有被声明为 volatile，可能会出现以下问题：
+     *
+     * 指令重排序问题：
+     *  JVM 可能对new Bootstrap()操作进行指令重排：
+     *      1.分配内存空间
+     *      2.将引用指向内存空间（此时对象尚未初始化）
+     *      3.执行构造函数初始化对象
+     *  若另一个线程在步骤 2 之后、步骤 3 之前检查daemon，会得到一个非空但未完全初始化的对象
+     * 可见性问题：
+     *  没有 volatile 修饰时，一个线程对daemon的修改可能不会立即刷新到主内存
+     *  其他线程可能继续使用本地缓存中的旧值，导致重复创建实例
+     */
     private static volatile Bootstrap daemon = null; // 单例Bootstrap实例，volatile确保线程可见性
 
     private static final File catalinaBaseFile; // Catalina基础目录文件对象
@@ -165,6 +178,7 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
      */
     private ClassLoader createClassLoader(String name, ClassLoader parent) throws Exception {
 
+        //对于common来说，一般是${catalina.base}/lib,${catalina.home}/lib
         String value = CatalinaProperties.getProperty(name + ".loader"); // 获取类加载器配置属性
         if ((value == null) || (value.isEmpty())) { // 如果属性为空
             return parent; // 返回父类加载器
@@ -180,8 +194,13 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
             // 检查是否为JAR URL存储库
             try {
                 URI uri = new URI(repository); // 将路径转换为URI
+                /**
+                 * URL 是 URI 的一个子集，专门用于标识网络资源
+                 * uri.toURL()方法将 URI 转换为具体的 URL 对象
+                 * URL 包含了访问资源所需的协议、主机、路径等完整信息
+                 */
                 @SuppressWarnings("unused")
-                URL url = uri.toURL(); // 将URI转换为URL
+                URL url = uri.toURL();
                 repositories.add(new Repository(repository, RepositoryType.URL)); // 添加URL类型的存储库
                 continue; // 继续下一个路径
             } catch (IllegalArgumentException | MalformedURLException | URISyntaxException e) {
@@ -204,6 +223,14 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
 
     /**
      * 替换给定字符串中的系统属性
+     * 格式：${property.name}
+     * 示例：${java.version} 会被替换为 JVM 版本号
+     *
+     * 未闭合的占位符（如 ${test）会被保留
+     * 空属性名（如 ${}）会被保留
+     *
+     * 特殊的：${catalina.home}：替换为 Tomcat 主目录路径
+     * ${catalina.base}：替换为 Tomcat 基础目录路径
      *
      * @param str 原始字符串
      * @return 替换后的字符串
@@ -584,41 +611,64 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
         return t; // 返回原始异常
     }
 
-    // 供单元测试保护
+    /**
+     * 解析路径字符串并返回路径数组，支持处理带双引号的路径
+     *
+     * @param value 包含路径的字符串，路径之间通常用逗号分隔
+     * @return 解析后的路径数组
+     */
     static String[] getPaths(String value) {
 
-        List<String> result = new ArrayList<>(); // 创建结果列表
-        Matcher matcher = PATH_PATTERN.matcher(value); // 创建正则表达式匹配器
+        // 创建用于存储结果路径的ArrayList
+        List<String> result = new ArrayList<>();
 
-        while (matcher.find()) { // 查找所有匹配项
-            String path = value.substring(matcher.start(), matcher.end()); // 获取匹配的路径
+        // 使用预定义的正则表达式模式匹配路径，PATH_PATTERN用于匹配带引号或不带引号的路径
+        Matcher matcher = PATH_PATTERN.matcher(value);
 
-            path = path.trim(); // 去除路径两端的空白
-            if (path.isEmpty()) { // 如果路径为空
-                continue; // 继续下一个匹配
+        // 循环查找所有匹配的路径
+        while (matcher.find()) {
+            // 获取当前匹配的路径子字符串
+            String path = value.substring(matcher.start(), matcher.end());
+
+            // 去除路径两端的空白字符
+            path = path.trim();
+
+            // 如果处理后路径为空，跳过当前循环
+            if (path.isEmpty()) {
+                continue;
             }
 
-            char first = path.charAt(0); // 获取路径首字符
-            char last = path.charAt(path.length() - 1); // 获取路径尾字符
+            // 获取路径的首字符和尾字符，用于判断是否为引号包裹的路径
+            char first = path.charAt(0);
+            char last = path.charAt(path.length() - 1);
 
-            if (first == '"' && last == '"' && path.length() > 1) { // 如果是用双引号包裹的路径
-                path = path.substring(1, path.length() - 1); // 去除双引号
-                path = path.trim(); // 去除两端空白
-                if (path.isEmpty()) { // 如果处理后路径为空
-                    continue; // 继续下一个匹配
+            // 处理双引号包裹的路径（如"path/to/lib.jar"）
+            if (first == '"' && last == '"' && path.length() > 1) {
+                // 去除首尾的双引号
+                path = path.substring(1, path.length() - 1);
+                // 再次去除两端的空白字符（处理引号内的空白）
+                path = path.trim();
+                // 如果去除引号和空白后路径为空，跳过当前循环
+                if (path.isEmpty()) {
+                    continue;
                 }
-            } else if (path.contains("\"")) { // 如果路径中包含未匹配的双引号
-                // 引号不平衡
-                // 太早使用标准i18n支持。类路径尚未配置。
+            }
+            // 检查路径中是否包含未匹配的双引号（如path"to/lib.jar）
+            else if (path.contains("\"")) {
+                // 抛出异常，提示双引号使用错误
                 throw new IllegalArgumentException(
                     "双引号[\"]字符只能用于引用路径。它不能出现在路径中。此加载器路径无效: [" + value + "]");
-            } else { // 非引号包裹的路径
-                // 不做操作
+            }
+            // 非引号包裹的路径无需特殊处理
+            else {
+                // 留空，不做操作
             }
 
-            result.add(path); // 将路径添加到结果列表
+            // 将处理后的有效路径添加到结果列表
+            result.add(path);
         }
 
-        return result.toArray(new String[0]); // 转换为字符串数组并返回
+        // 将结果列表转换为字符串数组并返回
+        return result.toArray(new String[0]);
     }
 }
