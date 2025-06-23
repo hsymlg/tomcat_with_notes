@@ -31,6 +31,69 @@ import org.apache.juli.logging.Log; // 导入日志接口
 import org.apache.juli.logging.LogFactory; // 导入日志工厂类
 
 /**
+ * 在 Tomcat 中，JDBC 驱动无法通过上下文类加载器找到的问题，本质上是由类加载器隔离机制和Java SPI（服务提供者接口）加载逻辑共同导致的。
+ * Tomcat 为每个 Web 应用创建独立的类加载器（WebappClassLoader），形成严格的隔离体系：
+ * Bootstrap ClassLoader（根加载器）
+ *     ↓
+ * Extension ClassLoader（扩展加载器）
+ *     ↓
+ * System ClassLoader（系统加载器，即Application ClassLoader）
+ *     ↓
+ * Tomcat CatalinaLoader（Tomcat系统加载器）
+ *     ↓
+ * Tomcat SharedLoader（共享加载器）
+ *     ↓
+ * WebappClassLoader（每个Web应用独立加载器），WebappClassLoader 的特性：优先加载自身路径（WEB-INF/classes和WEB-INF/lib）的类，父类加载器无法反向访问其子加载器中的类。
+ *
+ * JDBC 驱动通过java.sql.DriverManager注册，其核心逻辑如下：
+ * // DriverManager初始化时会扫描并加载驱动
+ * static {
+ *     loadInitialDrivers();
+ *     println("JDBC DriverManager initialized");
+ * }
+ * private static void loadInitialDrivers() {
+ *     // 通过SPI机制查找所有java.sql.Driver实现
+ *     // 关键问题：ServiceLoader.load()默认使用调用者的类加载器（即DriverManager的类加载器，通常是系统类加载器），而不是当前线程的上下文类加载器。
+ *     ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(Driver.class);
+ *     // 遍历加载驱动类
+ *     Iterator<Driver> driversIterator = loadedDrivers.iterator();
+ *     try {
+ *         while (driversIterator.hasNext()) {
+ *             driversIterator.next();
+ *         }
+ *     } catch (Throwable t) {
+ *         // 忽略错误
+ *     }
+ * }
+ *
+ * 假设将 JDBC 驱动（如mysql-connector-java.jar）放在 Web 应用的WEB-INF/lib下，此时：
+ * 驱动类（如com.mysql.cj.jdbc.Driver）由WebappClassLoader加载。
+ * DriverManager使用系统类加载器（Application ClassLoader）查找驱动类，但系统类加载器无法访问WebappClassLoader中的类，导致加载失败。
+ *
+ * 根本原因：
+ * 类加载器层级冲突：系统类加载器是WebappClassLoader的祖先，但祖先无法访问子孙加载器中的类（双亲委派机制的限制）。
+ * SPI 加载逻辑缺陷：ServiceLoader未主动使用上下文类加载器，而是固定使用调用者的类加载器，导致无法找到 Web 应用内的驱动类。
+ *
+ * Tomcat 的解决方案：显式设置上下文类加载器，将当前线程（即 Tomcat 启动线程）的上下文类加载器设置为catalinaLoader（Tomcat 的系统加载器），
+ * 而WebappClassLoader的父类加载器通常是sharedLoader（继承自catalinaLoader）。
+ * Thread.currentThread().setContextClassLoader(catalinaLoader);
+ *
+ * 当DriverManager通过 SPI 加载驱动时，若直接使用系统类加载器失败，部分框架（如 Tomcat）会通过以下方式间接使用上下文类加载器
+ * 通过Thread.currentThread().getContextClassLoader()获取当前线程的上下文类加载器，从而让DriverManager能访问 Web 应用内的驱动类。
+ * // 手动通过上下文类加载器加载驱动（伪代码）
+ * ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+ * if (contextClassLoader != null) {
+ *     try {
+ *         Class<?> driverClass = contextClassLoader.loadClass(driverClassName);
+ *         Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+ *         DriverManager.registerDriver(driver);
+ *     } catch (Exception e) {
+ *         // 处理异常
+ *     }
+ * }
+ */
+
+/**
  * Catalina的引导加载器。
  * 该应用程序构造一个类加载器，用于加载Catalina内部类
  * (通过累积在"catalina.home"下的"server"目录中找到的所有JAR文件)，
@@ -139,7 +202,9 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
     // -------------------------------------------------------------- 变量定义
 
     /**
-     * 守护进程引用，指向Catalina实例
+     * 守护进程引用，catalinaDaemon是 Tomcat 核心启动类Catalina的实例，负责管理容器的生命周期
+     * 虽然catalinaDaemon不是操作系统进程，但 Tomcat 确实可以作为系统服务运行：通过systemd、init.d脚本将 Tomcat 注册为系统服务
+     * 这些实现方式将 Tomcat 进程注册为系统服务，使其具备守护进程的特性，但这是通过外部脚本或工具实现的，而非catalinaDaemon变量直接控制。
      */
     private Object catalinaDaemon = null; // Catalina守护进程实例
 
@@ -286,9 +351,17 @@ public final class Bootstrap { // 定义Bootstrap类，final表示不可被继�
 
         initClassLoaders(); // 初始化类加载器
 
+        /**
+         * 在 Java 中，每个线程都有一个上下文类加载器(Context ClassLoader)，setContextClassLoader方法将当前线程（启动线程）的上下文类加载器设为 Tomcat 顶层加载器
+         * catalinaLoader → CommonClassLoader → Application ClassLoader
+         * 这行代码的核心目的是让 Tomcat 核心线程使用自定义类加载器加载类
+         * Tomcat 需要加载自身的核心类（如Catalina类），这些类由catalinaLoader管理，若使用默认的系统类加载器，可能无法找到 Tomcat 的自定义类
+         */
         Thread.currentThread().setContextClassLoader(catalinaLoader); // 设置当前线程的上下文类加载器为catalinaLoader
 
-        SecurityClassLoad.securityClassLoad(catalinaLoader); // 执行安全类加载检查
+        //当 Java 安全管理器（SecurityManager）启用时，类加载操作会受到更严格的安全检查，预加载这些类可以确保它们由系统信任的类加载器加载，避免后续访问时的权限问题
+        //若Catalina类先加载，其依赖的内部类可能在后续加载时因权限不足抛出异常
+        SecurityClassLoad.securityClassLoad(catalinaLoader);
 
         // 加载启动类并调用其process()方法
         if (log.isTraceEnabled()) { // 如果日志级别为TRACE

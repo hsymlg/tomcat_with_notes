@@ -47,6 +47,16 @@ import org.apache.juli.logging.LogFactory;
  */
 
 /**
+ * 加载器名称	层级	职责	父加载器
+ * Bootstrap	根层级	同 Java 标准	无
+ * Extension	第二层	同 Java 标准	Bootstrap
+ * Application	第三层	同 Java 标准，加载 JVM 启动时的系统类路径	Extension
+ * 下面2层是Tomcat的类加载器层级：
+ * CommonClassLoader	第四层	加载 Tomcat 公共库（${catalina.base}/lib），供所有 Web 应用共享	Application
+ * WebappClassLoader	第五层	加载单个 Web 应用的类库（WEB-INF/classes和WEB-INF/lib），实现应用隔离	CommonClassLoader
+ */
+
+/**
  * 工厂模式简介
  * 工厂模式是一种创建型设计模式，其核心思想是将对象的创建过程封装在一个专门的工厂类中，客户端无需直接通过new操作符创建对象，而是通过工厂类提供的方法来获取所需对象。这种模式有以下几个关键优点：
  *
@@ -275,6 +285,8 @@ public final class ClassLoaderFactory {
         return AccessController.doPrivileged((PrivilegedAction<URLClassLoader>) () -> {
             if (parent == null) {
                 // 若无父类加载器，创建根类加载器
+                // 当parent = null时，URLClassLoader的构造函数会将父加载器默认设为系统类加载器（Application）（Java 源码规定）。
+                // 代码中ClassLoaderFactory.createClassLoader最终会创建一个URLClassLoader，其父加载器为Application ClassLoader。
                 return new URLClassLoader(array);
             } else {
                 // 否则创建具有指定父类加载器的类加载器
