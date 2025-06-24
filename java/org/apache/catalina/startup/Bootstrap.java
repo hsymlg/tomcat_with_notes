@@ -29,7 +29,67 @@ import org.apache.catalina.startup.ClassLoaderFactory.Repository; // 导入类�
 import org.apache.catalina.startup.ClassLoaderFactory.RepositoryType; // 导入类加载器工厂的存储库类型
 import org.apache.juli.logging.Log; // 导入日志接口
 import org.apache.juli.logging.LogFactory; // 导入日志工厂类
-
+/**
+ * 阅读的流程
+ * 1. 启动阶段（服务器初始化）
+ * org.apache.catalina.startup.Bootstrap          // 启动入口类
+ * └─ org.apache.catalina.startup.Catalina        // 初始化 Catalina 引擎
+ *    └─ org.apache.catalina.core.StandardServer  // 管理 Service 组件
+ *       └─ org.apache.catalina.core.StandardService  // 连接 Connector 和 Container
+ *          ├─ org.apache.coyote.http11.Http11NioProtocol  // HTTP/1.1 协议处理器（NIO）
+ *          └─ org.apache.catalina.core.StandardEngine    // 顶级容器
+ *             └─ org.apache.catalina.core.StandardHost   // 虚拟主机
+ *                └─ org.apache.catalina.core.StandardContext  // Web 应用上下文
+ *
+ * 2. Connector 接收请求
+ * org.apache.coyote.http11.Http11NioProtocol$Http11ConnectionHandler  // 连接处理器
+ * └─ org.apache.tomcat.util.net.NioEndpoint$SocketProcessor  // NIO 套接字处理器
+ *    └─ org.apache.coyote.AbstractProcessorLight  // 抽象请求处理器
+ *       └─ org.apache.coyote.http11.Http11Processor  // HTTP/1.1 请求解析器
+ *          ├─ 解析 HTTP 请求行和头部
+ *          └─ 创建 Request 和 Response 对象
+ *
+ * 3. 请求进入容器（Container）
+ * org.apache.catalina.connector.CoyoteAdapter  // 连接 Coyote 和 Catalina
+ * └─ org.apache.catalina.connector.Request  // Catalina 请求对象
+ *    └─ org.apache.catalina.core.StandardEngineValve  // 引擎阀门
+ *       └─ org.apache.catalina.core.StandardHostValve  // 主机阀门
+ *          └─ org.apache.catalina.core.StandardContextValve  // 上下文阀门
+ *             ├─ 检查安全约束（SecurityConstraints）
+ *             └─ 创建 ServletRequest 和 ServletResponse
+ *
+ * 4. 映射请求到 Servlet
+ * org.apache.catalina.core.StandardWrapperValve  // Wrapper 阀门
+ * └─ org.apache.catalina.core.ApplicationFilterChain  // 过滤器链
+ *    ├─ 执行过滤器（Filter）链
+ *    └─ 找到匹配的 Servlet
+ *       └─ org.apache.catalina.core.StandardWrapper  // Servlet 包装器
+ *          └─ 加载并初始化 Servlet（如果未初始化）
+ *
+ * 5. 执行 Servlet
+ * javax.servlet.http.HttpServlet  // 用户自定义 Servlet 基类
+ * └─ 用户实现的 HttpServlet 子类
+ *    ├─ doGet()/doPost() 方法处理请求
+ *    └─ 生成响应内容到 ServletResponse
+ *
+ * 6. 响应处理
+ * org.apache.catalina.connector.Response  // Catalina 响应对象
+ * └─ org.apache.catalina.connector.CoyoteAdapter  // 转换为 Coyote 响应
+ *    └─ org.apache.coyote.http11.Http11OutputBuffer  // HTTP 输出缓冲区
+ *       └─ org.apache.tomcat.util.net.SocketChannelIO  // 通过 NIO 写回客户端
+ *
+ * 7. 关键辅助类
+ * 线程池管理
+ * org.apache.tomcat.util.threads.ThreadPoolExecutor  // 工作线程池
+ * org.apache.tomcat.util.threads.TaskQueue          // 任务队列
+ *
+ * 类加载
+ * org.apache.catalina.loader.WebappClassLoaderBase  // Web 应用类加载器
+ *
+ * 会话管理
+ * org.apache.catalina.session.StandardManager  // 会话管理器
+ * org.apache.catalina.session.StandardSession  // 会话实现
+ */
 /**
  * 在 Tomcat 中，JDBC 驱动无法通过上下文类加载器找到的问题，本质上是由类加载器隔离机制和Java SPI（服务提供者接口）加载逻辑共同导致的。
  * Tomcat 为每个 Web 应用创建独立的类加载器（WebappClassLoader），形成严格的隔离体系：

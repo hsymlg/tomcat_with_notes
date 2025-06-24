@@ -355,8 +355,10 @@ public class Catalina {
         digester.setUseContextClassLoader(true);      // 使用上下文类加载器
 
         // --------------------- 配置Server元素解析规则 ---------------------
+        //当解析到 <Server> 标签时，创建 StandardServer 实例
         digester.addObjectCreate("Server", "org.apache.catalina.core.StandardServer", "className");
         digester.addSetProperties("Server");
+        //// 将创建的 Server 实例设置到 Catalina 对象中
         digester.addSetNext("Server", "setServer", "org.apache.catalina.Server");
 
         // --------------------- 配置全局命名资源解析规则 ---------------------
@@ -479,6 +481,7 @@ public class Catalina {
 
     /**
      * 解析服务器配置文件（启动或停止流程）
+     * createStartDigester方法，Digester 解析 server.xml 时会动态创建 StandardServer 实例并注入到 Catalina 对象中
      * @param start true表示启动流程，false表示停止流程
      */
     protected void parseServerXml(boolean start) {
@@ -649,6 +652,9 @@ public class Catalina {
         // 初始化命名服务（JNDI）
         initNaming();
 
+        /**
+         * Catalina 类的 getServer() 方法看似没有对应的 setServer() 调用，但实际上服务器实例是通过 Digester 解析 XML 配置文件时动态设置的。这是 Tomcat 使用的一种基于 XML 配置的依赖注入模式
+         */
         // 解析服务器配置文件
         parseServerXml(true);
         Server s = getServer();
