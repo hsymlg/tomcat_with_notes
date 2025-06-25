@@ -328,6 +328,7 @@ public class Catalina {
 
     /**
      * 创建用于启动流程的Digester实例
+     *
      * 配置解析server.xml的规则集
      * @return 初始化好的Digester实例
      */
@@ -358,7 +359,7 @@ public class Catalina {
         //当解析到 <Server> 标签时，创建 StandardServer 实例
         digester.addObjectCreate("Server", "org.apache.catalina.core.StandardServer", "className");
         digester.addSetProperties("Server");
-        //// 将创建的 Server 实例设置到 Catalina 对象中
+        // 将创建的 Server 实例设置到 Catalina 对象中
         digester.addSetNext("Server", "setServer", "org.apache.catalina.Server");
 
         // --------------------- 配置全局命名资源解析规则 ---------------------
@@ -654,6 +655,19 @@ public class Catalina {
 
         /**
          * Catalina 类的 getServer() 方法看似没有对应的 setServer() 调用，但实际上服务器实例是通过 Digester 解析 XML 配置文件时动态设置的。这是 Tomcat 使用的一种基于 XML 配置的依赖注入模式
+         *
+         * Tomcat 通过 Digester 框架 实现了基于 XML 配置的动态依赖注入。虽然代码中看不到显式的 setServer() 调用，但在解析 server.xml 时，
+         * Digester 会自动调用该方法将 StandardServer 实例注入到 Catalina 对象中。这是典型的 控制反转（IoC） 设计模式在 Tomcat 中的应用。
+         *
+         * 为什么 Digester 解析 XML 属于 IOC 模式？
+         * IOC（控制反转）的核心思想是对象的创建、依赖管理控制权由容器而非对象自身负责。Digester 框架在 Tomcat 中的 IOC 体现如下：
+         *
+         * 对象创建控制权转移：
+         * Digester 通过配置规则（Rule）将 XML 元素映射为 Java 对象的创建过程。例如，解析server.xml时，遇到<Server>标签会自动创建StandardServer实例，无需手动调用构造函数。
+         * 依赖关系自动注入：
+         * 解析 XML 时，Digester 会根据规则设置对象属性（如通过SetPropertiesRule），将子元素对应的对象注入到父对象中。例如，Server中的Service、Connector等组件的关联关系由 Digester 自动管理。
+         * 配置驱动的对象生命周期：
+         * 整个对象图的构建由 XML 配置文件驱动，Digester 作为容器根据配置文件的结构动态组装对象，符合 IOC “容器控制对象” 的本质。
          */
         // 解析服务器配置文件
         parseServerXml(true);

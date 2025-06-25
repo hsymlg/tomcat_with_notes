@@ -91,6 +91,31 @@ import org.apache.juli.logging.LogFactory; // 导入日志工厂类
  * org.apache.catalina.session.StandardSession  // 会话实现
  */
 /**
+ * 请求接收与转发的完整方法链路
+ * 1. 服务器启动阶段（请求处理准备）
+ * StandardServer.start()
+ *     → StandardService.start()
+ *         → Connector.start()
+ *             → ProtocolHandler.start()  // 如Http11NioProtocol
+ *                 → NioEndpoint.start()
+ *                     → ServerSocketChannel.open()  // 打开套接字监听端口
+ *
+ * 2. 请求接收阶段（从网络到 Connector）
+ * Http11NioProtocol$Http11ConnectionHandler.accept()
+ *     → NioEndpoint$SocketProcessor.run()
+ *         → Http11Processor.process()  // 解析HTTP请求
+ *             → CoyoteAdapter.service()  // 转换为Catalina请求对象
+ *                 → StandardService.mapperListener.service()  // 映射请求到Service
+ *
+ * 3. 请求转发阶段（从 Connector 到 Service）
+ * CoyoteAdapter.service()
+ *     → StandardService.getMapper().map()  // 映射请求到Engine
+ *         → StandardService.mapperListener.lifecycleEvent()  // 监听容器变化更新映射
+ *     → StandardEngine.process()  // Service关联的Engine处理请求
+ *         → Host.process()  // 虚拟主机
+ *             → Context.process()  // Web应用上下文
+ */
+/**
  * 在 Tomcat 中，JDBC 驱动无法通过上下文类加载器找到的问题，本质上是由类加载器隔离机制和Java SPI（服务提供者接口）加载逻辑共同导致的。
  * Tomcat 为每个 Web 应用创建独立的类加载器（WebappClassLoader），形成严格的隔离体系：
  * Bootstrap ClassLoader（根加载器）

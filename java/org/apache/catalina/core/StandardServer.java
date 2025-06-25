@@ -51,6 +51,29 @@ import org.apache.tomcat.util.threads.TaskThreadFactory;
 /**
  * Tomcat服务器的标准实现类，作为顶层容器管理所有Service组件
  * 负责初始化、启动、停止整个Tomcat服务器及内部组件
+ *
+ * StandardServer包含一个Service数组，用于管理所有服务实例
+ * StandardService通过setServer(Server server)方法与StandardServer建立关联
+ * 这种关联关系在 Tomcat 启动过程中由配置文件和 Digester 框架自动建立
+ *
+ * <Server port="8005" shutdown="SHUTDOWN">
+ *     <Service name="Catalina">
+ *         <!-- 服务配置 -->
+ *     </Service>
+ * </Server>
+ *
+ * 生命周期关联：
+ * 启动过程：StandardServer.start()会遍历所有StandardService并调用service.start()
+ * 停止过程：StandardServer.stop()会遍历所有StandardService并调用service.stop()
+ * 组件管理：StandardServer负责管理StandardService的生命周期，而StandardService负责管理自己的组件（Connector、Engine 等）
+ *
+ * 数据流向关联：
+ * 当请求到达 Tomcat 时：
+ * StandardServer接收请求并转发给对应的StandardService
+ * StandardService通过Connector接收请求
+ * StandardService将请求交给关联的Engine处理
+ * Engine进一步将请求分发到具体的 Web 应用
+ *
  * @author Craig R. McClanahan
  */
 public final class StandardServer extends LifecycleMBeanBase implements Server {
@@ -84,6 +107,16 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
     }
 
 
+    /**
+     * volatile 适用场景：
+     * 变量被多线程读写，且写操作会影响读操作的结果。
+     * 作为状态标志控制线程行为（如 stopAwait）。
+     * 防止指令重排序导致的问题（如双重检查锁定）。
+     * 替代方案：
+     * 使用锁（synchronized、ReentrantLock）保证可见性和原子性。
+     * 使用原子类（如 AtomicBoolean）替代 volatile + 原子操作。
+     * 不可变对象（final）和线程封闭（Thread-local）避免共享变量。
+     */
     // ----------------------------------------------------- 实例变量
     /** 全局JNDI上下文，存储服务器级命名资源（如数据库连接池） */
     private javax.naming.Context globalNamingContext = null;

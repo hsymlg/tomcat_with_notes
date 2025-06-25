@@ -1,18 +1,7 @@
 /*
- *  Licensed to the Apache Software Foundation (ASF) under one or more
- *  contributor license agreements.  See the NOTICE file distributed with
- *  this work for additional information regarding copyright ownership.
- *  The ASF licenses this file to You under the Apache License, Version 2.0
- *  (the "License"); you may not use this file except in compliance with
- *  the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * 版权声明：Apache Software Foundation (ASF) 授权许可
+ * 许可证信息：遵循 Apache License, Version 2.0
+ * 说明：允许在遵守许可证的前提下使用、分发本软件
  */
 package org.apache.coyote.http11;
 
@@ -53,48 +42,62 @@ import org.apache.tomcat.util.net.SSLHostConfig;
 import org.apache.tomcat.util.net.SocketWrapperBase;
 import org.apache.tomcat.util.res.StringManager;
 
+/**
+ * HTTP/1.1协议处理器的抽象基类
+ * 提供HTTP/1.1协议处理的通用功能和配置
+ * 实现了HTTP/1.1协议的核心逻辑，包括请求解析、响应生成、连接管理等
+ */
 public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
 
+    // 字符串资源管理器，用于获取国际化提示信息
     protected static final StringManager sm = StringManager.getManager(AbstractHttp11Protocol.class);
 
+    // 压缩配置处理器，管理HTTP响应压缩相关配置
     private final CompressionConfig compressionConfig = new CompressionConfig();
 
+    // HTTP解析器，用于解析HTTP请求和响应
     private HttpParser httpParser = null;
 
+    /**
+     * 构造函数
+     * @param endpoint 关联的端点实例，处理底层网络连接
+     */
     public AbstractHttp11Protocol(AbstractEndpoint<S,?> endpoint) {
-        super(endpoint);
-        setConnectionTimeout(Constants.DEFAULT_CONNECTION_TIMEOUT);
+        super(endpoint); // 调用父类构造函数
+        setConnectionTimeout(Constants.DEFAULT_CONNECTION_TIMEOUT); // 设置默认连接超时时间
     }
 
-
+    /**
+     * 初始化协议处理器
+     * 配置HTTP解析器和升级协议
+     */
     @Override
     public void init() throws Exception {
+        // 创建HTTP解析器，用于解析HTTP请求和响应
         httpParser = new HttpParser(relaxedPathChars, relaxedQueryChars);
 
-        // Upgrade protocols have to be configured first since the endpoint
-        // init (triggered via super.init() below) uses this list to configure
-        // the list of ALPN protocols to advertise
+        // 先配置升级协议，因为端点初始化时需要这些配置
         for (UpgradeProtocol upgradeProtocol : upgradeProtocols) {
             configureUpgradeProtocol(upgradeProtocol);
         }
 
         try {
-            super.init();
+            super.init(); // 调用父类初始化方法
         } finally {
-            // Set the Http11Protocol (i.e. this) for any upgrade protocols once
-            // this has completed initialisation as the upgrade protocols may expect this
-            // to be initialised when the call is made
+            // 初始化完成后设置Http11Protocol引用到升级协议
             for (UpgradeProtocol upgradeProtocol : upgradeProtocols) {
                 upgradeProtocol.setHttp11Protocol(this);
             }
         }
     }
 
-
+    /**
+     * 销毁协议处理器
+     * 注销升级协议相关的MBean
+     */
     @Override
     public void destroy() throws Exception {
-        // There may be upgrade protocols with their own MBeans. These need to
-        // be de-registered.
+        // 注销升级协议相关的MBean
         ObjectName rgOname = getGlobalRequestProcessorMBeanName();
         if (rgOname != null) {
             Registry registry = Registry.getRegistry(null);
@@ -105,93 +108,127 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
             }
         }
 
-        super.destroy();
+        super.destroy(); // 调用父类销毁方法
     }
 
-
+    /**
+     * 获取协议名称
+     * @return 协议名称为"Http"
+     */
     @Override
     protected String getProtocolName() {
         return "Http";
     }
 
-
     /**
-     * {@inheritDoc}
-     * <p>
-     * Over-ridden here to make the method visible to nested classes.
+     * 获取关联的端点（覆盖父类方法，提供更具体的类型）
+     * @return 关联的端点实例
      */
     @Override
     protected AbstractEndpoint<S,?> getEndpoint() {
         return super.getEndpoint();
     }
 
-
+    /**
+     * 获取HTTP解析器
+     * @return HTTP解析器实例
+     */
     public HttpParser getHttpParser() {
         return httpParser;
     }
 
+    // -------------------------- HTTP特定属性配置 --------------------------
 
-    // ------------------------------------------------ HTTP specific properties
-    // ------------------------------------------ managed in the ProtocolHandler
-
+    // 继续响应定时配置
     private ContinueResponseTiming continueResponseTiming = ContinueResponseTiming.IMMEDIATELY;
 
+    /**
+     * 获取继续响应定时策略
+     * @return 继续响应定时策略名称
+     */
     public String getContinueResponseTiming() {
         return continueResponseTiming.toString();
     }
 
+    /**
+     * 设置继续响应定时策略
+     * @param continueResponseTiming 继续响应定时策略名称
+     */
     public void setContinueResponseTiming(String continueResponseTiming) {
         this.continueResponseTiming = ContinueResponseTiming.fromString(continueResponseTiming);
     }
 
+    /**
+     * 获取内部继续响应定时策略
+     * @return 继续响应定时策略枚举值
+     */
     public ContinueResponseTiming getContinueResponseTimingInternal() {
         return continueResponseTiming;
     }
 
-
+    // 是否在响应中使用Keep-Alive头部
     private boolean useKeepAliveResponseHeader = true;
 
+    /**
+     * 获取是否使用Keep-Alive响应头部
+     * @return true如果使用，否则false
+     */
     public boolean getUseKeepAliveResponseHeader() {
         return useKeepAliveResponseHeader;
     }
 
+    /**
+     * 设置是否使用Keep-Alive响应头部
+     * @param useKeepAliveResponseHeader true表示使用，false表示不使用
+     */
     public void setUseKeepAliveResponseHeader(boolean useKeepAliveResponseHeader) {
         this.useKeepAliveResponseHeader = useKeepAliveResponseHeader;
     }
 
-
+    // 宽松路径字符配置
     private String relaxedPathChars = null;
 
+    /**
+     * 获取宽松路径字符
+     * @return 宽松路径字符字符串
+     */
     public String getRelaxedPathChars() {
         return relaxedPathChars;
     }
 
+    /**
+     * 设置宽松路径字符
+     * @param relaxedPathChars 宽松路径字符字符串
+     */
     public void setRelaxedPathChars(String relaxedPathChars) {
         this.relaxedPathChars = relaxedPathChars;
     }
 
-
+    // 宽松查询字符配置
     private String relaxedQueryChars = null;
 
+    /**
+     * 获取宽松查询字符
+     * @return 宽松查询字符字符串
+     */
     public String getRelaxedQueryChars() {
         return relaxedQueryChars;
     }
 
+    /**
+     * 设置宽松查询字符
+     * @param relaxedQueryChars 宽松查询字符字符串
+     */
     public void setRelaxedQueryChars(String relaxedQueryChars) {
         this.relaxedQueryChars = relaxedQueryChars;
     }
 
-
+    // 允许主机头不匹配配置（已弃用）
     private boolean allowHostHeaderMismatch = false;
 
     /**
-     * Will Tomcat accept an HTTP 1.1 request where the host header does not agree with the host specified (if any) in
-     * the request line?
-     *
-     * @return {@code true} if Tomcat will allow such requests, otherwise {@code false}
-     *
-     * @deprecated This will removed in Tomcat 11 onwards where {@code allowHostHeaderMismatch} will be hard-coded to
-     *                 {@code false}.
+     * 获取是否允许主机头不匹配
+     * @return true表示允许，否则false（已弃用）
      */
     @Deprecated
     public boolean getAllowHostHeaderMismatch() {
@@ -199,30 +236,20 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
     }
 
     /**
-     * Will Tomcat accept an HTTP 1.1 request where the host header does not agree with the host specified (if any) in
-     * the request line?
-     *
-     * @param allowHostHeaderMismatch {@code true} to allow such requests, {@code false} to reject them with a 400
-     *
-     * @deprecated This will removed in Tomcat 11 onwards where {@code allowHostHeaderMismatch} will be hard-coded to
-     *                 {@code false}.
+     * 设置是否允许主机头不匹配
+     * @param allowHostHeaderMismatch true表示允许，否则false（已弃用）
      */
     @Deprecated
     public void setAllowHostHeaderMismatch(boolean allowHostHeaderMismatch) {
         this.allowHostHeaderMismatch = allowHostHeaderMismatch;
     }
 
-
+    // 拒绝非法头部配置（已弃用）
     private boolean rejectIllegalHeader = true;
 
     /**
-     * If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a
-     * token) will the request be rejected (with a 400 response) or will the illegal header be ignored?
-     *
-     * @return {@code true} if the request will be rejected or {@code false} if the header will be ignored
-     *
-     * @deprecated This will removed in Tomcat 11 onwards where {@code allowHostHeaderMismatch} will be hard-coded to
-     *                 {@code true}.
+     * 获取是否拒绝非法头部
+     * @return true表示拒绝，否则false（已弃用）
      */
     @Deprecated
     public boolean getRejectIllegalHeader() {
@@ -230,130 +257,129 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
     }
 
     /**
-     * If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a
-     * token) should the request be rejected (with a 400 response) or should the illegal header be ignored?
-     *
-     * @param rejectIllegalHeader {@code true} to reject requests with illegal header names or values, {@code false} to
-     *                                ignore the header
-     *
-     * @deprecated This will removed in Tomcat 11 onwards where {@code allowHostHeaderMismatch} will be hard-coded to
-     *                 {@code true}.
+     * 设置是否拒绝非法头部
+     * @param rejectIllegalHeader true表示拒绝，否则false（已弃用）
      */
     @Deprecated
     public void setRejectIllegalHeader(boolean rejectIllegalHeader) {
         this.rejectIllegalHeader = rejectIllegalHeader;
     }
 
-
+    // 最大保存POST大小配置
     private int maxSavePostSize = 4 * 1024;
 
     /**
-     * Return the maximum size of the post which will be saved during FORM or CLIENT-CERT authentication.
-     *
-     * @return The size in bytes
+     * 获取最大保存POST大小
+     * @return 最大保存POST大小（字节）
      */
     public int getMaxSavePostSize() {
         return maxSavePostSize;
     }
 
     /**
-     * Set the maximum size of a POST which will be buffered during FORM or CLIENT-CERT authentication. When a POST is
-     * received where the security constraints require a client certificate, the POST body needs to be buffered while an
-     * SSL handshake takes place to obtain the certificate. A similar buffering is required during FORM auth.
-     *
-     * @param maxSavePostSize The maximum size POST body to buffer in bytes
+     * 设置最大保存POST大小
+     * @param maxSavePostSize 最大保存POST大小（字节）
      */
     public void setMaxSavePostSize(int maxSavePostSize) {
         this.maxSavePostSize = maxSavePostSize;
     }
 
-
-    /**
-     * Maximum size of the HTTP message header.
-     */
+    // 最大HTTP头部大小配置
     private int maxHttpHeaderSize = 8 * 1024;
 
+    /**
+     * 获取最大HTTP头部大小
+     * @return 最大HTTP头部大小（字节）
+     */
     public int getMaxHttpHeaderSize() {
         return maxHttpHeaderSize;
     }
 
+    /**
+     * 设置最大HTTP头部大小
+     * @param valueI 最大HTTP头部大小（字节）
+     */
     public void setMaxHttpHeaderSize(int valueI) {
         maxHttpHeaderSize = valueI;
     }
 
-
-    /**
-     * Maximum size of the HTTP request message header.
-     */
+    // 最大HTTP请求头部大小配置
     private int maxHttpRequestHeaderSize = -1;
 
+    /**
+     * 获取最大HTTP请求头部大小
+     * @return 最大HTTP请求头部大小（字节），-1表示使用全局配置
+     */
     public int getMaxHttpRequestHeaderSize() {
         return maxHttpRequestHeaderSize == -1 ? getMaxHttpHeaderSize() : maxHttpRequestHeaderSize;
     }
 
+    /**
+     * 设置最大HTTP请求头部大小
+     * @param valueI 最大HTTP请求头部大小（字节），-1表示使用全局配置
+     */
     public void setMaxHttpRequestHeaderSize(int valueI) {
         maxHttpRequestHeaderSize = valueI;
     }
 
-
-    /**
-     * Maximum size of the HTTP response message header.
-     */
+    // 最大HTTP响应头部大小配置
     private int maxHttpResponseHeaderSize = -1;
 
+    /**
+     * 获取最大HTTP响应头部大小
+     * @return 最大HTTP响应头部大小（字节），-1表示使用全局配置
+     */
     public int getMaxHttpResponseHeaderSize() {
         return maxHttpResponseHeaderSize == -1 ? getMaxHttpHeaderSize() : maxHttpResponseHeaderSize;
     }
 
+    /**
+     * 设置最大HTTP响应头部大小
+     * @param valueI 最大HTTP响应头部大小（字节），-1表示使用全局配置
+     */
     public void setMaxHttpResponseHeaderSize(int valueI) {
         maxHttpResponseHeaderSize = valueI;
     }
 
-
+    // 连接上传超时配置
     private int connectionUploadTimeout = 300000;
 
     /**
-     * Specifies a different (usually longer) connection timeout during data upload. Default is 5 minutes as in Apache
-     * HTTPD server.
-     *
-     * @return The timeout in milliseconds
+     * 获取连接上传超时时间
+     * @return 连接上传超时时间（毫秒）
      */
     public int getConnectionUploadTimeout() {
         return connectionUploadTimeout;
     }
 
     /**
-     * Set the upload timeout.
-     *
-     * @param timeout Upload timeout in milliseconds
+     * 设置连接上传超时时间
+     * @param timeout 连接上传超时时间（毫秒）
      */
     public void setConnectionUploadTimeout(int timeout) {
         connectionUploadTimeout = timeout;
     }
 
-
+    // 禁用上传超时配置
     private boolean disableUploadTimeout = true;
 
     /**
-     * Get the flag that controls upload time-outs. If true, the connectionUploadTimeout will be ignored and the regular
-     * socket timeout will be used for the full duration of the connection.
-     *
-     * @return {@code true} if the separate upload timeout is disabled
+     * 获取是否禁用上传超时
+     * @return true表示禁用，否则false
      */
     public boolean getDisableUploadTimeout() {
         return disableUploadTimeout;
     }
 
     /**
-     * Set the flag to control whether a separate connection timeout is used during upload of a request body.
-     *
-     * @param isDisabled {@code true} if the separate upload timeout should be disabled
+     * 设置是否禁用上传超时
+     * @param isDisabled true表示禁用，否则false
      */
     public void setDisableUploadTimeout(boolean isDisabled) {
         disableUploadTimeout = isDisabled;
     }
 
-
+    // 压缩配置代理方法
     public void setCompression(String compression) {
         compressionConfig.setCompression(compression);
     }
@@ -366,7 +392,7 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         return compressionConfig.getCompressionLevel();
     }
 
-
+    // 不压缩的User-Agent配置
     public String getNoCompressionUserAgents() {
         return compressionConfig.getNoCompressionUserAgents();
     }
@@ -379,7 +405,7 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         compressionConfig.setNoCompressionUserAgents(noCompressionUserAgents);
     }
 
-
+    // 可压缩MIME类型配置
     public String getCompressibleMimeType() {
         return compressionConfig.getCompressibleMimeType();
     }
@@ -392,7 +418,7 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         return compressionConfig.getCompressibleMimeTypes();
     }
 
-
+    // 压缩最小大小配置
     public int getCompressionMinSize() {
         return compressionConfig.getCompressionMinSize();
     }
@@ -401,19 +427,17 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         compressionConfig.setCompressionMinSize(compressionMinSize);
     }
 
-
+    // 判断是否使用压缩
     public boolean useCompression(Request request, Response response) {
         return compressionConfig.useCompression(request, response);
     }
 
-
+    // 受限User-Agent配置
     private Pattern restrictedUserAgents = null;
 
     /**
-     * Get the string form of the regular expression that defines the User agents which should be restricted to HTTP/1.0
-     * support.
-     *
-     * @return The regular expression as a String
+     * 获取受限User-Agent的正则表达式
+     * @return 受限User-Agent的正则表达式字符串
      */
     public String getRestrictedUserAgents() {
         if (restrictedUserAgents == null) {
@@ -423,16 +447,17 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         }
     }
 
+    /**
+     * 获取受限User-Agent的正则表达式模式
+     * @return 受限User-Agent的正则表达式模式
+     */
     protected Pattern getRestrictedUserAgentsPattern() {
         return restrictedUserAgents;
     }
 
     /**
-     * Set restricted user agent list (which will downgrade the connector to HTTP/1.0 mode). Regular expression as
-     * supported by {@link Pattern}.
-     *
-     * @param restrictedUserAgents The regular expression as supported by {@link Pattern} for the user agents e.g.
-     *                                 "gorilla|desesplorer|tigrus"
+     * 设置受限User-Agent的正则表达式
+     * @param restrictedUserAgents 受限User-Agent的正则表达式
      */
     public void setRestrictedUserAgents(String restrictedUserAgents) {
         if (restrictedUserAgents == null || restrictedUserAgents.isEmpty()) {
@@ -442,30 +467,31 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         }
     }
 
-
+    // Server头部配置
     private String server;
 
+    /**
+     * 获取Server头部值
+     * @return Server头部值
+     */
     public String getServer() {
         return server;
     }
 
     /**
-     * Set the server header name.
-     *
-     * @param server The new value to use for the server header
+     * 设置Server头部值
+     * @param server Server头部值
      */
     public void setServer(String server) {
         this.server = server;
     }
 
-
+    // 是否移除应用提供的Server头部值
     private boolean serverRemoveAppProvidedValues = false;
 
     /**
-     * Should application provider values for the HTTP Server header be removed. Note that if {@link #server} is set,
-     * any application provided value will be over-ridden.
-     *
-     * @return {@code true} if application provided values should be removed, otherwise {@code false}
+     * 获取是否移除应用提供的Server头部值
+     * @return true表示移除，否则false
      */
     public boolean getServerRemoveAppProvidedValues() {
         return serverRemoveAppProvidedValues;
@@ -475,12 +501,13 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         this.serverRemoveAppProvidedValues = serverRemoveAppProvidedValues;
     }
 
-
-    /**
-     * Maximum size of trailing headers in bytes
-     */
+    // 最大 trailers 大小配置
     private int maxTrailerSize = 8192;
 
+    /**
+     * 获取最大 trailers 大小
+     * @return 最大 trailers 大小（字节）
+     */
     public int getMaxTrailerSize() {
         return maxTrailerSize;
     }
@@ -489,12 +516,13 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         this.maxTrailerSize = maxTrailerSize;
     }
 
-
-    /**
-     * Maximum size of extension information in chunked encoding
-     */
+    // 分块编码中扩展信息的最大大小配置
     private int maxExtensionSize = 8192;
 
+    /**
+     * 获取分块编码中扩展信息的最大大小
+     * @return 扩展信息的最大大小（字节）
+     */
     public int getMaxExtensionSize() {
         return maxExtensionSize;
     }
@@ -503,12 +531,13 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         this.maxExtensionSize = maxExtensionSize;
     }
 
-
-    /**
-     * Maximum amount of request body to swallow.
-     */
+    // 最大吞咽请求体大小配置
     private int maxSwallowSize = 2 * 1024 * 1024;
 
+    /**
+     * 获取最大吞咽请求体大小
+     * @return 最大吞咽请求体大小（字节）
+     */
     public int getMaxSwallowSize() {
         return maxSwallowSize;
     }
@@ -517,13 +546,13 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         this.maxSwallowSize = maxSwallowSize;
     }
 
-
-    /**
-     * This field indicates if the protocol is treated as if it is secure. This normally means https is being used but
-     * can be used to fake https e.g behind a reverse proxy.
-     */
+    // 是否安全连接配置
     private boolean secure;
 
+    /**
+     * 获取是否为安全连接
+     * @return true表示安全连接，否则false
+     */
     public boolean getSecure() {
         return secure;
     }
@@ -532,16 +561,14 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         secure = b;
     }
 
-
-    /**
-     * The names of headers that are allowed to be sent via a trailer when using chunked encoding. They are stored in
-     * lower case.
-     */
+    // 允许的 trailers 头部集合
     private final Set<String> allowedTrailerHeaders = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 设置允许的 trailers 头部
+     * @param commaSeparatedHeaders 逗号分隔的头部名称字符串
+     */
     public void setAllowedTrailerHeaders(String commaSeparatedHeaders) {
-        // Jump through some hoops so we don't end up with an empty set while
-        // doing updates.
         Set<String> toRemove = new HashSet<>(allowedTrailerHeaders);
         if (commaSeparatedHeaders != null) {
             String[] headers = commaSeparatedHeaders.split(",");
@@ -557,61 +584,86 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         }
     }
 
+    /**
+     * 获取内部允许的 trailers 头部集合
+     * @return 允许的 trailers 头部集合
+     */
     protected Set<String> getAllowedTrailerHeadersInternal() {
         return allowedTrailerHeaders;
     }
 
+    /**
+     * 判断指定头部是否允许作为 trailers
+     * @param headerName 头部名称
+     * @return true表示允许，否则false
+     */
     public boolean isTrailerHeaderAllowed(String headerName) {
         return allowedTrailerHeaders.contains(headerName);
     }
 
+    /**
+     * 获取允许的 trailers 头部字符串
+     * @return 逗号分隔的允许头部名称字符串
+     */
     public String getAllowedTrailerHeaders() {
-        // Chances of a change during execution of this line are small enough
-        // that a sync is unnecessary.
         List<String> copy = new ArrayList<>(allowedTrailerHeaders);
         return StringUtils.join(copy);
     }
 
+    /**
+     * 添加允许的 trailers 头部
+     * @param header 头部名称
+     */
     public void addAllowedTrailerHeader(String header) {
         if (header != null) {
             allowedTrailerHeaders.add(header.trim().toLowerCase(Locale.ENGLISH));
         }
     }
 
+    /**
+     * 移除允许的 trailers 头部
+     * @param header 头部名称
+     */
     public void removeAllowedTrailerHeader(String header) {
         if (header != null) {
             allowedTrailerHeaders.remove(header.trim().toLowerCase(Locale.ENGLISH));
         }
     }
 
+    // -------------------------- 升级协议管理 --------------------------
 
-    /**
-     * The upgrade protocol instances configured.
-     */
+    // 配置的升级协议列表
     private final List<UpgradeProtocol> upgradeProtocols = new ArrayList<>();
 
+    /**
+     * 添加升级协议
+     * @param upgradeProtocol 升级协议实例
+     */
     @Override
     public void addUpgradeProtocol(UpgradeProtocol upgradeProtocol) {
         upgradeProtocols.add(upgradeProtocol);
     }
 
+    /**
+     * 获取所有升级协议
+     * @return 升级协议数组
+     */
     @Override
     public UpgradeProtocol[] findUpgradeProtocols() {
         return upgradeProtocols.toArray(new UpgradeProtocol[0]);
     }
 
-
-    /**
-     * The protocols that are available via internal Tomcat support for access via HTTP upgrade.
-     */
+    // HTTP升级协议映射（协议名称到升级协议实例）
     private final Map<String,UpgradeProtocol> httpUpgradeProtocols = new HashMap<>();
-    /**
-     * The protocols that are available via internal Tomcat support for access via ALPN negotiation.
-     */
+    // ALPN协商协议映射（协议名称到升级协议实例）
     private final Map<String,UpgradeProtocol> negotiatedProtocols = new HashMap<>();
 
+    /**
+     * 配置升级协议
+     * @param upgradeProtocol 升级协议实例
+     */
     private void configureUpgradeProtocol(UpgradeProtocol upgradeProtocol) {
-        // HTTP Upgrade
+        // 配置HTTP Upgrade协议
         String httpUpgradeName = upgradeProtocol.getHttpUpgradeName(getEndpoint().isSSLEnabled());
         boolean httpUpgradeConfigured = false;
         if (httpUpgradeName != null && !httpUpgradeName.isEmpty()) {
@@ -620,56 +672,54 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
             getLog().info(sm.getString("abstractHttp11Protocol.httpUpgradeConfigured", getName(), httpUpgradeName));
         }
 
-
-        // ALPN
+        // 配置ALPN协议（仅在SSL启用时）
         String alpnName = upgradeProtocol.getAlpnName();
         if (alpnName != null && !alpnName.isEmpty()) {
-            // ALPN is only available with TLS
             if (getEndpoint().isSSLEnabled()) {
                 negotiatedProtocols.put(alpnName, upgradeProtocol);
                 getEndpoint().addNegotiatedProtocol(alpnName);
                 getLog().info(sm.getString("abstractHttp11Protocol.alpnConfigured", getName(), alpnName));
-            } else {
-                if (!httpUpgradeConfigured) {
-                    // ALPN is not supported by this connector and the upgrade
-                    // protocol implementation does not support standard HTTP
-                    // upgrade so there is no way available to enable support
-                    // for this protocol.
-                    getLog().error(sm.getString("abstractHttp11Protocol.alpnWithNoAlpn",
-                            upgradeProtocol.getClass().getName(), alpnName, getName()));
-                }
+            } else if (!httpUpgradeConfigured) {
+                getLog().error(sm.getString("abstractHttp11Protocol.alpnWithNoAlpn",
+                    upgradeProtocol.getClass().getName(), alpnName, getName()));
             }
         }
     }
 
+    /**
+     * 获取协商的协议对应的升级协议
+     * @param negotiatedName 协商的协议名称
+     * @return 升级协议实例，若不存在则返回null
+     */
     @Override
     public UpgradeProtocol getNegotiatedProtocol(String negotiatedName) {
         return negotiatedProtocols.get(negotiatedName);
     }
 
+    /**
+     * 获取升级的协议对应的升级协议
+     * @param upgradedName 升级的协议名称
+     * @return 升级协议实例，若不存在则返回null
+     */
     @Override
     public UpgradeProtocol getUpgradeProtocol(String upgradedName) {
         return httpUpgradeProtocols.get(upgradedName);
     }
 
-
-    /**
-     * Map of upgrade protocol name to {@link UpgradeGroupInfo} instance.
-     * <p>
-     * HTTP upgrades via {@link HttpServletRequest#upgrade(Class)} do not have to depend on an {@code UpgradeProtocol}.
-     * To enable basic statistics to be made available for these protocols, a map of protocol name to
-     * {@link UpgradeGroupInfo} instances is maintained here.
-     */
+    // 升级协议组信息映射（协议名称到升级协议组信息）
     private final Map<String,UpgradeGroupInfo> upgradeProtocolGroupInfos = new ConcurrentHashMap<>();
 
+    /**
+     * 获取升级协议组信息
+     * @param upgradeProtocol 升级协议名称
+     * @return 升级协议组信息实例
+     */
     public UpgradeGroupInfo getUpgradeGroupInfo(String upgradeProtocol) {
         if (upgradeProtocol == null) {
             return null;
         }
         UpgradeGroupInfo result = upgradeProtocolGroupInfos.get(upgradeProtocol);
         if (result == null) {
-            // Protecting against multiple JMX registration, not modification
-            // of the Map.
             synchronized (upgradeProtocolGroupInfos) {
                 result = upgradeProtocolGroupInfos.get(upgradeProtocol);
                 if (result == null) {
@@ -690,7 +740,11 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         return result;
     }
 
-
+    /**
+     * 获取升级协议的MBean名称
+     * @param upgradeProtocol 升级协议名称
+     * @return MBean名称，若创建失败则返回null
+     */
     public ObjectName getONameForUpgrade(String upgradeProtocol) {
         ObjectName oname = null;
         ObjectName parentRgOname = getGlobalRequestProcessorMBeanName();
@@ -711,10 +765,9 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         return oname;
     }
 
+    // -------------------------- 传递给端点的配置 --------------------------
 
-    // ------------------------------------------------ HTTP specific properties
-    // ------------------------------------------ passed through to the EndPoint
-
+    // SSL启用状态配置
     public boolean isSSLEnabled() {
         return getEndpoint().isSSLEnabled();
     }
@@ -723,7 +776,7 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         getEndpoint().setSSLEnabled(SSLEnabled);
     }
 
-
+    // 是否使用sendfile配置
     public boolean getUseSendfile() {
         return getEndpoint().getUseSendfile();
     }
@@ -732,29 +785,18 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         getEndpoint().setUseSendfile(useSendfile);
     }
 
-
-    /**
-     * @return The maximum number of requests which can be performed over a keep-alive connection. The default is the
-     *             same as for Apache HTTP Server (100).
-     */
+    // 最大Keep-Alive请求数配置
     public int getMaxKeepAliveRequests() {
         return getEndpoint().getMaxKeepAliveRequests();
     }
 
-    /**
-     * Set the maximum number of Keep-Alive requests to allow. This is to safeguard from DoS attacks. Setting to a
-     * negative value disables the limit.
-     *
-     * @param mkar The new maximum number of Keep-Alive requests allowed
-     */
     public void setMaxKeepAliveRequests(int mkar) {
         getEndpoint().setMaxKeepAliveRequests(mkar);
     }
 
+    // -------------------------- HTTPS相关配置 --------------------------
 
-    // ----------------------------------------------- HTTPS specific properties
-    // ------------------------------------------ passed through to the EndPoint
-
+    // 默认SSL主机配置名称
     public String getDefaultSSLHostConfigName() {
         return getEndpoint().getDefaultSSLHostConfigName();
     }
@@ -763,49 +805,55 @@ public abstract class AbstractHttp11Protocol<S> extends AbstractProtocol<S> {
         getEndpoint().setDefaultSSLHostConfigName(defaultSSLHostConfigName);
     }
 
-
+    // 添加SSL主机配置
     @Override
     public void addSslHostConfig(SSLHostConfig sslHostConfig) {
         getEndpoint().addSslHostConfig(sslHostConfig);
     }
-
 
     @Override
     public void addSslHostConfig(SSLHostConfig sslHostConfig, boolean replace) {
         getEndpoint().addSslHostConfig(sslHostConfig, replace);
     }
 
-
     @Override
     public SSLHostConfig[] findSslHostConfigs() {
         return getEndpoint().findSslHostConfigs();
     }
 
-
     public void reloadSslHostConfigs() {
         getEndpoint().reloadSslHostConfigs();
     }
-
 
     public void reloadSslHostConfig(String hostName) {
         getEndpoint().reloadSslHostConfig(hostName);
     }
 
+    // -------------------------- 处理器创建 --------------------------
 
-    // ------------------------------------------------------------- Common code
-
+    /**
+     * 创建HTTP/1.1处理器
+     * @return HTTP/1.1处理器实例
+     */
     @Override
     protected Processor createProcessor() {
         return new Http11Processor(this, adapter);
     }
 
-
+    /**
+     * 创建升级处理器
+     * @param socket 套接字包装器
+     * @param upgradeToken 升级令牌
+     * @return 升级处理器实例
+     */
     @Override
     protected Processor createUpgradeProcessor(SocketWrapperBase<?> socket, UpgradeToken upgradeToken) {
         HttpUpgradeHandler httpUpgradeHandler = upgradeToken.getHttpUpgradeHandler();
         if (httpUpgradeHandler instanceof InternalHttpUpgradeHandler) {
+            // 内部升级处理器
             return new UpgradeProcessorInternal(socket, upgradeToken, getUpgradeGroupInfo(upgradeToken.getProtocol()));
         } else {
+            // 外部升级处理器
             return new UpgradeProcessorExternal(socket, upgradeToken, getUpgradeGroupInfo(upgradeToken.getProtocol()));
         }
     }

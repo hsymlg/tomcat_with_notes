@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：Apache Software Foundation (ASF) 授权许可
+ * 许可证信息：遵循 Apache License, Version 2.0
+ * 说明：允许在遵守许可证的前提下使用、分发本软件
  */
 package org.apache.tomcat.util.net;
 
@@ -28,195 +17,237 @@ import org.apache.tomcat.util.net.NioEndpoint.NioSocketWrapper;
 import org.apache.tomcat.util.res.StringManager;
 
 /**
- * Base class for a SocketChannel wrapper used by the endpoint. This way, logic for an SSL socket channel remains the
- * same as for a non SSL, making sure we don't need to code for any exception cases.
+ * SocketChannel的包装基类，由NIO端点使用
+ * 该类封装了SocketChannel并提供统一接口，使SSL和非SSL通道的逻辑保持一致
+ * 避免为不同类型的通道编写特殊处理逻辑
  */
 public class NioChannel implements ByteChannel, ScatteringByteChannel, GatheringByteChannel {
 
+    // 字符串资源管理器，用于获取国际化提示信息
     protected static final StringManager sm = StringManager.getManager(NioChannel.class);
 
+    // 空ByteBuffer实例，用于优化空数据传输场景
     protected static final ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
+    // 套接字缓冲区处理器，负责管理读写缓冲区
     protected final SocketBufferHandler bufHandler;
+    // 封装的底层SocketChannel实例
     protected SocketChannel sc = null;
+    // 关联的NioSocketWrapper实例，包含连接的元数据
     protected NioSocketWrapper socketWrapper = null;
 
+    /**
+     * 构造函数
+     * @param bufHandler 套接字缓冲区处理器
+     */
     public NioChannel(SocketBufferHandler bufHandler) {
         this.bufHandler = bufHandler;
     }
 
     /**
-     * Reset the channel
-     *
-     * @param channel       the socket channel
-     * @param socketWrapper the socket wrapper
-     *
-     * @throws IOException If a problem was encountered resetting the channel
+     * 重置通道状态
+     * @param channel 要重置的SocketChannel
+     * @param socketWrapper 关联的NioSocketWrapper
+     * @throws IOException 重置通道时发生I/O错误
      */
     public void reset(SocketChannel channel, NioSocketWrapper socketWrapper) throws IOException {
         this.sc = channel;
         this.socketWrapper = socketWrapper;
-        bufHandler.reset();
+        bufHandler.reset(); // 重置缓冲区处理器
     }
 
     /**
-     * @return the socketWrapper
+     * 获取关联的NioSocketWrapper
+     * @return NioSocketWrapper实例
      */
     NioSocketWrapper getSocketWrapper() {
         return socketWrapper;
     }
 
     /**
-     * Free the channel memory
+     * 释放通道占用的内存资源
      */
     public void free() {
-        bufHandler.free();
+        bufHandler.free(); // 释放缓冲区资源
     }
 
     /**
-     * Closes this channel.
-     *
-     * @throws IOException If an I/O error occurs
+     * 关闭通道
+     * @throws IOException 关闭通道时发生I/O错误
      */
     @Override
     public void close() throws IOException {
-        sc.close();
+        sc.close(); // 关闭底层SocketChannel
     }
 
     /**
-     * Close the connection.
-     *
-     * @param force Should the underlying socket be forcibly closed?
-     *
-     * @throws IOException If closing the secure channel fails.
+     * 关闭连接
+     * @param force 是否强制关闭底层套接字
+     * @throws IOException 关闭通道时发生I/O错误
      */
     public void close(boolean force) throws IOException {
         if (isOpen() || force) {
-            close();
+            close(); // 调用标准关闭方法
         }
     }
 
     /**
-     * Tells whether or not this channel is open.
-     *
-     * @return <code>true</code> if, and only if, this channel is open
+     * 检查通道是否打开
+     * @return true如果通道处于打开状态，否则false
      */
     @Override
     public boolean isOpen() {
-        return sc.isOpen();
+        return sc.isOpen(); // 检查底层SocketChannel是否打开
     }
 
     /**
-     * Writes a sequence of bytes to this channel from the given buffer.
-     *
-     * @param src The buffer from which bytes are to be retrieved
-     *
-     * @return The number of bytes written, possibly zero
-     *
-     * @throws IOException If some other I/O error occurs
+     * 从缓冲区写入数据到通道
+     * @param src 包含要写入数据的缓冲区
+     * @return 写入的字节数，可能为0
+     * @throws IOException 发生I/O错误
      */
     @Override
     public int write(ByteBuffer src) throws IOException {
-        checkInterruptStatus();
+        checkInterruptStatus(); // 检查线程中断状态
         if (!src.hasRemaining()) {
-            // Nothing left to write
-            return 0;
+            return 0; // 缓冲区无剩余数据时返回0
         }
-        return sc.write(src);
-    }
-
-    @Override
-    public long write(ByteBuffer[] srcs) throws IOException {
-        return write(srcs, 0, srcs.length);
-    }
-
-    @Override
-    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-        checkInterruptStatus();
-        return sc.write(srcs, offset, length);
+        return sc.write(src); // 调用底层SocketChannel的write方法
     }
 
     /**
-     * Reads a sequence of bytes from this channel into the given buffer.
-     *
-     * @param dst The buffer into which bytes are to be transferred
-     *
-     * @return The number of bytes read, possibly zero, or <code>-1</code> if the channel has reached end-of-stream
-     *
-     * @throws IOException If some other I/O error occurs
+     * 从缓冲区数组写入数据到通道
+     * @param srcs 缓冲区数组
+     * @return 写入的总字节数
+     * @throws IOException 发生I/O错误
+     */
+    @Override
+    public long write(ByteBuffer[] srcs) throws IOException {
+        return write(srcs, 0, srcs.length); // 调用带偏移量的写入方法
+    }
+
+    /**
+     * 从缓冲区数组的指定范围写入数据到通道
+     * @param srcs 缓冲区数组
+     * @param offset 起始偏移量
+     * @param length 要写入的缓冲区数量
+     * @return 写入的总字节数
+     * @throws IOException 发生I/O错误
+     */
+    @Override
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        checkInterruptStatus(); // 检查线程中断状态
+        return sc.write(srcs, offset, length); // 调用底层SocketChannel的write方法
+    }
+
+    /**
+     * 从通道读取数据到缓冲区
+     * @param dst 用于存储读取数据的缓冲区
+     * @return 读取的字节数，-1表示已到达流末尾
+     * @throws IOException 发生I/O错误
      */
     @Override
     public int read(ByteBuffer dst) throws IOException {
-        return sc.read(dst);
+        return sc.read(dst); // 调用底层SocketChannel的read方法
     }
 
+    /**
+     * 从通道读取数据到缓冲区数组
+     * @param dsts 缓冲区数组
+     * @return 读取的总字节数
+     * @throws IOException 发生I/O错误
+     */
     @Override
     public long read(ByteBuffer[] dsts) throws IOException {
-        return read(dsts, 0, dsts.length);
+        return read(dsts, 0, dsts.length); // 调用带偏移量的读取方法
     }
 
+    /**
+     * 从通道读取数据到缓冲区数组的指定范围
+     * @param dsts 缓冲区数组
+     * @param offset 起始偏移量
+     * @param length 要读取的缓冲区数量
+     * @return 读取的总字节数
+     * @throws IOException 发生I/O错误
+     */
     @Override
     public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
-        return sc.read(dsts, offset, length);
+        return sc.read(dsts, offset, length); // 调用底层SocketChannel的read方法
     }
 
+    /**
+     * 获取套接字缓冲区处理器
+     * @return SocketBufferHandler实例
+     */
     public SocketBufferHandler getBufHandler() {
         return bufHandler;
     }
 
+    /**
+     * 获取底层的SocketChannel
+     * @return SocketChannel实例
+     */
     public SocketChannel getIOChannel() {
         return sc;
     }
 
+    /**
+     * 检查通道是否正在关闭
+     * @return false（非安全通道始终返回false）
+     */
     public boolean isClosing() {
         return false;
     }
 
+    /**
+     * 检查握手是否完成
+     * @return true（非安全通道始终返回true）
+     */
     public boolean isHandshakeComplete() {
         return true;
     }
 
     /**
-     * Performs SSL handshake hence is a no-op for the non-secure implementation.
-     *
-     * @param read  Unused in non-secure implementation
-     * @param write Unused in non-secure implementation
-     *
-     * @return Always returns zero
-     *
-     * @throws IOException Never for non-secure channel
+     * 执行SSL握手（非安全通道的无操作方法）
+     * @param read 是否需要读取操作（非安全通道忽略）
+     * @param write 是否需要写入操作（非安全通道忽略）
+     * @return 始终返回0
+     * @throws IOException 非安全通道不会抛出异常
      */
     public int handshake(boolean read, boolean write) throws IOException {
         return 0;
     }
 
+    /**
+     * 返回通道的字符串表示
+     * @return 包含类名和底层SocketChannel的字符串
+     */
     @Override
     public String toString() {
         return super.toString() + ":" + sc;
     }
 
+    /**
+     * 获取 outbound 缓冲区中剩余的字节数
+     * @return 始终返回0（非安全通道无outbound缓冲区）
+     */
     public int getOutboundRemaining() {
         return 0;
     }
 
     /**
-     * Return true if the buffer wrote data. NO-OP for non-secure channel.
-     *
-     * @return Always returns {@code false} for non-secure channel
-     *
-     * @throws IOException Never for non-secure channel
+     * 刷新outbound缓冲区（非安全通道的无操作方法）
+     * @return 始终返回false
+     * @throws IOException 非安全通道不会抛出异常
      */
     public boolean flushOutbound() throws IOException {
         return false;
     }
 
     /**
-     * This method should be used to check the interrupt status before attempting a write. If a thread has been
-     * interrupted and the interrupt has not been cleared then an attempt to write to the socket will fail. When this
-     * happens the socket is removed from the poller without the socket being selected. This results in a connection
-     * limit leak for NIO as the endpoint expects the socket to be selected even in error conditions.
-     *
-     * @throws IOException If the current thread was interrupted
+     * 检查线程中断状态
+     * 在执行写入操作前调用，避免中断导致的异常
+     * @throws IOException 如果当前线程已中断
      */
     protected void checkInterruptStatus() throws IOException {
         if (Thread.interrupted()) {
@@ -224,68 +255,84 @@ public class NioChannel implements ByteChannel, ScatteringByteChannel, Gathering
         }
     }
 
+    // 应用层读取缓冲区处理器
     private ApplicationBufferHandler appReadBufHandler;
 
+    /**
+     * 设置应用层读取缓冲区处理器
+     * @param handler 应用层缓冲区处理器
+     */
     public void setAppReadBufHandler(ApplicationBufferHandler handler) {
         this.appReadBufHandler = handler;
     }
 
+    /**
+     * 获取应用层读取缓冲区处理器
+     * @return 应用层缓冲区处理器
+     */
     protected ApplicationBufferHandler getAppReadBufHandler() {
         return appReadBufHandler;
     }
 
+    /**
+     * 已关闭的NioChannel静态实例
+     * 用于表示已关闭的通道，避免重复创建新实例
+     */
     static final NioChannel CLOSED_NIO_CHANNEL = new NioChannel(SocketBufferHandler.EMPTY) {
         @Override
         public void close() throws IOException {
+            // 空实现，不执行关闭操作
         }
 
         @Override
         public boolean isOpen() {
-            return false;
+            return false; // 始终返回关闭状态
         }
 
         @Override
         public void reset(SocketChannel channel, NioSocketWrapper socketWrapper) throws IOException {
+            // 空实现，不执行重置操作
         }
 
         @Override
         public void free() {
+            // 空实现，不执行资源释放
         }
 
         @Override
         protected ApplicationBufferHandler getAppReadBufHandler() {
-            return ApplicationBufferHandler.EMPTY;
+            return ApplicationBufferHandler.EMPTY; // 返回空缓冲区处理器
         }
 
         @Override
         public void setAppReadBufHandler(ApplicationBufferHandler handler) {
+            // 空实现，不执行设置操作
         }
 
         @Override
         public int read(ByteBuffer dst) throws IOException {
-            return -1;
+            return -1; // 读取操作返回-1（流末尾）
         }
 
         @Override
         public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
-            return -1L;
+            return -1L; // 读取操作返回-1（流末尾）
         }
 
         @Override
         public int write(ByteBuffer src) throws IOException {
             checkInterruptStatus();
-            throw new ClosedChannelException();
+            throw new ClosedChannelException(); // 写入操作抛出通道已关闭异常
         }
 
         @Override
         public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-            throw new ClosedChannelException();
+            throw new ClosedChannelException(); // 写入操作抛出通道已关闭异常
         }
 
         @Override
         public String toString() {
-            return "Closed NioChannel";
+            return "Closed NioChannel"; // 返回已关闭通道的字符串表示
         }
     };
-
 }
