@@ -1,80 +1,61 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：Apache Software Foundation (ASF) 授权许可
+ * 许可证信息：遵循 Apache License, Version 2.0
+ * 说明：允许在遵守许可证的前提下使用、分发本软件
  */
 package org.apache.catalina;
 
 /**
- * An <b>Engine</b> is a Container that represents the entire Catalina servlet engine. It is useful in the following
- * types of scenarios:
+ * Engine接口表示整个Catalina servlet引擎
+ * 它是一个顶级容器，适用于以下场景：
  * <ul>
- * <li>You wish to use Interceptors that see every single request processed by the entire engine.
- * <li>You wish to run Catalina in with a standalone HTTP connector, but still want support for multiple virtual hosts.
+ * <li>需要拦截器监控整个引擎处理的每个请求
+ * <li>使用独立HTTP连接器运行Catalina，但仍需支持多虚拟主机
  * </ul>
- * In general, you would not use an Engine when deploying Catalina connected to a web server (such as Apache), because
- * the Connector will have utilized the web server's facilities to determine which Context (or perhaps even which
- * Wrapper) should be utilized to process this request.
- * <p>
- * The child containers attached to an Engine are generally implementations of Host (representing a virtual host) or
- * Context (representing individual an individual servlet context), depending upon the Engine implementation.
- * <p>
- * If used, an Engine is always the top level Container in a Catalina hierarchy. Therefore, the implementation's
- * <code>setParent()</code> method should throw <code>IllegalArgumentException</code>.
+ *
+ * 通常，当Catalina连接到Web服务器(如Apache)时不使用Engine，
+ * 因为连接器会利用Web服务器的功能来确定应该使用哪个Context处理请求。
+ *
+ * Engine附加的子容器通常是Host(表示虚拟主机)或Context(表示Servlet上下文)的实现。
+ * Engine是Catalina容器层次结构中的顶层容器，因此其setParent()方法应抛出IllegalArgumentException。
  *
  * @author Craig R. McClanahan
  */
 public interface Engine extends Container {
 
     /**
-     * @return the default host name for this Engine.
+     * 获取此Engine的默认主机名
+     * @return 默认主机名
      */
     String getDefaultHost();
 
-
     /**
-     * Set the default hostname for this Engine.
-     *
-     * @param defaultHost The new default host
+     * 设置此Engine的默认主机名
+     * @param defaultHost 新的默认主机名
      */
     void setDefaultHost(String defaultHost);
 
-
     /**
-     * @return the JvmRouteId for this engine.
+     * 获取此Engine的JVM路由ID
+     * @return JVM路由ID
      */
     String getJvmRoute();
 
-
     /**
-     * Set the JvmRouteId for this engine.
-     *
-     * @param jvmRouteId the (new) JVM Route ID. Each Engine within a cluster must have a unique JVM Route ID.
+     * 设置此Engine的JVM路由ID
+     * @param jvmRouteId 新的JVM路由ID，集群中的每个Engine必须有唯一的JVM路由ID
      */
     void setJvmRoute(String jvmRouteId);
 
-
     /**
-     * @return the <code>Service</code> with which we are associated (if any).
+     * 获取与此Engine关联的Service
+     * @return 关联的Service，若没有则返回null
      */
     Service getService();
 
-
     /**
-     * Set the <code>Service</code> with which we are associated (if any).
-     *
-     * @param service The service that owns this Engine
+     * 设置与此Engine关联的Service
+     * @param service 拥有此Engine的Service
      */
     void setService(Service service);
 }

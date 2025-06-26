@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：Apache Software Foundation (ASF) 授权许可
+ * 许可证信息：遵循 Apache License, Version 2.0
+ * 说明：允许在遵守许可证的前提下使用、分发本软件
  */
 package org.apache.catalina;
 
@@ -20,238 +9,202 @@ import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
 
-
 /**
- * A <b>Host</b> is a Container that represents a virtual host in the Catalina servlet engine. It is useful in the
- * following types of scenarios:
+ * Host接口表示Catalina servlet引擎中的虚拟主机
+ * 适用于以下场景：
  * <ul>
- * <li>You wish to use Interceptors that see every single request processed by this particular virtual host.
- * <li>You wish to run Catalina in with a standalone HTTP connector, but still want support for multiple virtual hosts.
+ * <li>需要拦截器监控此虚拟主机处理的每个请求
+ * <li>使用独立HTTP连接器运行Catalina，但需要支持多个虚拟主机
  * </ul>
- * In general, you would not use a Host when deploying Catalina connected to a web server (such as Apache), because the
- * Connector will have utilized the web server's facilities to determine which Context (or perhaps even which Wrapper)
- * should be utilized to process this request.
- * <p>
- * The parent Container attached to a Host is generally an Engine, but may be some other implementation, or may be
- * omitted if it is not necessary.
- * <p>
- * The child containers attached to a Host are generally implementations of Context (representing an individual servlet
- * context).
+ * 通常，当Catalina连接到Web服务器(如Apache)时不使用Host，
+ * 因为连接器会利用Web服务器功能确定处理请求的Context或Wrapper
+ *
+ * Host的父容器通常是Engine，其子容器通常是Context实现
  *
  * @author Craig R. McClanahan
  */
 public interface Host extends Container {
 
+    // ----------------------------------------------------- 常量定义
 
-    // ----------------------------------------------------- Manifest Constants
-
-
-    /**
-     * The ContainerEvent event type sent when a new alias is added by <code>addAlias()</code>.
-     */
+    /** 当通过addAlias()添加新别名时发送的ContainerEvent事件类型 */
     String ADD_ALIAS_EVENT = "addAlias";
 
-
-    /**
-     * The ContainerEvent event type sent when an old alias is removed by <code>removeAlias()</code>.
-     */
+    /** 当通过removeAlias()移除旧别名时发送的ContainerEvent事件类型 */
     String REMOVE_ALIAS_EVENT = "removeAlias";
 
-
-    // ------------------------------------------------------------- Properties
-
+    // ------------------------------------------------------------- 属性方法
 
     /**
-     * @return the XML root for this Host. This can be an absolute pathname or a relative pathname. If null, the base
-     *             path defaults to ${catalina.base}/conf/&lt;engine name&gt;/&lt;host name&gt; directory
+     * 获取此Host的XML根目录
+     * 可以是绝对路径或相对路径，若为null则默认为${catalina.base}/conf/&lt;engine name&gt;/&lt;host name&gt;目录
+     * @return XML根目录路径
      */
     String getXmlBase();
 
     /**
-     * Set the Xml root for this Host. This can be an absolute pathname or a relative pathname. If null, the base path
-     * defaults to ${catalina.base}/conf/&lt;engine name&gt;/&lt;host name&gt; directory
-     *
-     * @param xmlBase The new XML root
+     * 设置此Host的XML根目录
+     * 可以是绝对路径或相对路径，若为null则使用默认目录
+     * @param xmlBase 新的XML根目录路径
      */
     void setXmlBase(String xmlBase);
 
     /**
-     * @return a default configuration path of this Host. The file will be canonical if possible.
+     * 获取此Host的默认配置路径文件
+     * 文件将尽可能返回规范形式
+     * @return 配置基础文件
      */
     File getConfigBaseFile();
 
     /**
-     * @return the application root for this Host. This can be an absolute pathname, a relative pathname, or a URL.
+     * 获取此Host的应用程序根目录
+     * 可以是绝对路径、相对路径或URL
+     * @return 应用程序根目录路径
      */
     String getAppBase();
 
-
     /**
-     * @return an absolute {@link File} for the appBase of this Host. The file will be canonical if possible. There is
-     *             no guarantee that the appBase exists.
+     * 获取此Host的应用程序根目录的绝对文件表示
+     * 文件将尽可能返回规范形式，不保证目录存在
+     * @return 应用程序根目录文件
      */
     File getAppBaseFile();
 
-
     /**
-     * Set the application root for this Host. This can be an absolute pathname, a relative pathname, or a URL.
-     *
-     * @param appBase The new application root
+     * 设置此Host的应用程序根目录
+     * 可以是绝对路径、相对路径或URL
+     * @param appBase 新的应用程序根目录路径
      */
     void setAppBase(String appBase);
 
-
     /**
-     * @return the legacy (Java EE) application root for this Host. This can be an absolute pathname, a relative
-     *             pathname, or a URL.
+     * 获取此Host的传统(Java EE)应用程序根目录
+     * 可以是绝对路径、相对路径或URL
+     * @return 传统应用程序根目录路径
      */
     String getLegacyAppBase();
 
-
     /**
-     * @return an absolute {@link File} for the legacy (Java EE) appBase of this Host. The file will be canonical if
-     *             possible. There is no guarantee that the appBase exists.
+     * 获取此Host的传统(Java EE)应用程序根目录的绝对文件表示
+     * 文件将尽可能返回规范形式，不保证目录存在
+     * @return 传统应用程序根目录文件
      */
     File getLegacyAppBaseFile();
 
-
     /**
-     * Set the legacy (Java EE) application root for this Host. This can be an absolute pathname, a relative pathname,
-     * or a URL.
-     *
-     * @param legacyAppBase The new legacy application root
+     * 设置此Host的传统(Java EE)应用程序根目录
+     * 可以是绝对路径、相对路径或URL
+     * @param legacyAppBase 新的传统应用程序根目录路径
      */
     void setLegacyAppBase(String legacyAppBase);
 
-
     /**
-     * @return the value of the auto deploy flag. If true, it indicates that this host's child webapps should be
-     *             discovered and automatically deployed dynamically.
+     * 获取自动部署标志值
+     * 若为true，表示应自动发现并部署此主机的子Web应用程序
+     * @return 自动部署标志
      */
     boolean getAutoDeploy();
 
-
     /**
-     * Set the auto deploy flag value for this host.
-     *
-     * @param autoDeploy The new auto deploy flag
+     * 设置此主机的自动部署标志值
+     * @param autoDeploy 新的自动部署标志
      */
     void setAutoDeploy(boolean autoDeploy);
 
-
     /**
-     * @return the Java class name of the context configuration class for new web applications.
+     * 获取新Web应用程序的上下文配置类的Java类名
+     * @return 上下文配置类名
      */
     String getConfigClass();
 
-
     /**
-     * Set the Java class name of the context configuration class for new web applications.
-     *
-     * @param configClass The new context configuration class
+     * 设置新Web应用程序的上下文配置类的Java类名
+     * @param configClass 新的上下文配置类名
      */
     void setConfigClass(String configClass);
 
-
     /**
-     * @return the value of the deploy on startup flag. If true, it indicates that this host's child webapps should be
-     *             discovered and automatically deployed.
+     * 获取启动时部署标志值
+     * 若为true，表示应自动发现并部署此主机的子Web应用程序
+     * @return 启动时部署标志
      */
     boolean getDeployOnStartup();
 
-
     /**
-     * Set the deploy on startup flag value for this host.
-     *
-     * @param deployOnStartup The new deploy on startup flag
+     * 设置此主机的启动时部署标志值
+     * @param deployOnStartup 新的启动时部署标志
      */
     void setDeployOnStartup(boolean deployOnStartup);
 
-
     /**
-     * @return the regular expression that defines the files and directories in the host's appBase that will be ignored
-     *             by the automatic deployment process.
+     * 获取自动部署过程中忽略的文件和目录的正则表达式
+     * @return 忽略模式字符串
      */
     String getDeployIgnore();
 
-
     /**
-     * @return the compiled regular expression that defines the files and directories in the host's appBase that will be
-     *             ignored by the automatic deployment process.
+     * 获取自动部署过程中忽略的文件和目录的编译正则表达式
+     * @return 编译后的忽略模式
      */
     Pattern getDeployIgnorePattern();
 
-
     /**
-     * Set the regular expression that defines the files and directories in the host's appBase that will be ignored by
-     * the automatic deployment process.
-     *
-     * @param deployIgnore A regular expression matching file names
+     * 设置自动部署过程中忽略的文件和目录的正则表达式
+     * @param deployIgnore 匹配文件名的正则表达式
      */
     void setDeployIgnore(String deployIgnore);
 
-
     /**
-     * @return the executor that is used for starting and stopping contexts. This is primarily for use by components
-     *             deploying contexts that want to do this in a multithreaded manner.
+     * 获取用于启动和停止上下文的执行器
+     * 主要供需要以多线程方式部署上下文的组件使用
+     * @return 启动/停止执行器
      */
     ExecutorService getStartStopExecutor();
 
-
     /**
-     * Returns <code>true</code> if the Host will attempt to create directories for appBase and xmlBase unless they
-     * already exist.
-     *
-     * @return true if the Host will attempt to create directories
+     * 获取是否尝试创建appBase和xmlBase目录的标志
+     * @return 若Host将尝试创建目录则为true
      */
     boolean getCreateDirs();
 
-
     /**
-     * Should the Host attempt to create directories for xmlBase and appBase upon startup.
-     *
-     * @param createDirs The new value for this flag
+     * 设置Host是否应在启动时尝试创建xmlBase和appBase目录
+     * @param createDirs 此标志的新值
      */
     void setCreateDirs(boolean createDirs);
 
-
     /**
-     * @return <code>true</code> of the Host is configured to automatically undeploy old versions of applications
-     *             deployed using parallel deployment. This only takes effect is {@link #getAutoDeploy()} also returns
-     *             <code>true</code>.
+     * 获取是否自动取消部署旧版本应用程序的标志
+     * 仅当getAutoDeploy()也返回true时生效
+     * @return 若自动取消部署旧版本则为true
      */
     boolean getUndeployOldVersions();
 
-
     /**
-     * Set to <code>true</code> if the Host should automatically undeploy old versions of applications deployed using
-     * parallel deployment. This only takes effect if {@link #getAutoDeploy()} returns <code>true</code>.
-     *
-     * @param undeployOldVersions The new value for this flag
+     * 设置是否自动取消部署使用并行部署的应用程序的旧版本
+     * 仅当getAutoDeploy()返回true时生效
+     * @param undeployOldVersions 此标志的新值
      */
     void setUndeployOldVersions(boolean undeployOldVersions);
 
-
-    // --------------------------------------------------------- Public Methods
+    // --------------------------------------------------------- 公共方法
 
     /**
-     * Add an alias name that should be mapped to this same Host.
-     *
-     * @param alias The alias to be added
+     * 添加应映射到此Host的别名
+     * @param alias 要添加的别名
      */
     void addAlias(String alias);
 
-
     /**
-     * @return the array of alias names for this Host. If none are defined, a zero length array is returned.
+     * 获取此Host的别名数组
+     * 若无别名定义，返回零长度数组
+     * @return 别名数组
      */
     String[] findAliases();
 
-
     /**
-     * Remove the specified alias name from the aliases for this Host.
-     *
-     * @param alias Alias name to be removed
+     * 从此Host的别名中移除指定的别名
+     * @param alias 要移除的别名
      */
     void removeAlias(String alias);
 }

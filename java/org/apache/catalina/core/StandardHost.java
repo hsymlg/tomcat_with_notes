@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：Apache Software Foundation (ASF) 授权许可
+ * 许可证信息：遵循 Apache License, Version 2.0
+ * 说明：允许在遵守许可证的前提下使用、分发本软件
  */
 package org.apache.catalina.core;
 
@@ -47,8 +36,8 @@ import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
 
 /**
- * Standard implementation of the <b>Host</b> interface. Each child container must be a Context implementation to
- * process the requests directed to a particular web application.
+ * Host接口的标准实现
+ * 每个子容器必须是Context实现，用于处理指向特定Web应用程序的请求
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
@@ -57,228 +46,155 @@ public class StandardHost extends ContainerBase implements Host {
 
     private static final Log log = LogFactory.getLog(StandardHost.class);
 
-    // ----------------------------------------------------------- Constructors
-
+    // ----------------------------------------------------------- 构造函数
 
     /**
-     * Create a new StandardHost component with the default basic Valve.
+     * 创建带有默认基础Valve的StandardHost组件
      */
     public StandardHost() {
-
         super();
-        pipeline.setBasic(new StandardHostValve());
-
+        pipeline.setBasic(new StandardHostValve()); // 设置基础Valve为StandardHostValve
     }
 
+    // ----------------------------------------------------- 实例变量
 
-    // ----------------------------------------------------- Instance Variables
-
-
-    /**
-     * The set of aliases for this Host.
-     */
+    /** 此Host的别名集合 */
     private String[] aliases = new String[0];
+    private final Object aliasesLock = new Object(); // 别名操作锁
 
-    private final Object aliasesLock = new Object();
-
-
-    /**
-     * The application root for this Host.
-     */
+    /** 此Host的应用程序根目录 */
     private String appBase = "webapps";
-    private volatile File appBaseFile = null;
+    private volatile File appBaseFile = null; // 应用程序根目录文件对象
 
-
-    /**
-     * The legacy (Java EE) application root for this Host.
-     */
+    /** 此Host的传统(Java EE)应用程序根目录 */
     private String legacyAppBase = "webapps-javaee";
-    private volatile File legacyAppBaseFile = null;
+    private volatile File legacyAppBaseFile = null; // 传统应用程序根目录文件对象
 
-
-    /**
-     * The XML root for this Host.
-     */
+    /** 此Host的XML根目录 */
     private String xmlBase = null;
+    private volatile File hostConfigBase = null; // 主机配置基础文件
 
-    /**
-     * host's default config path
-     */
-    private volatile File hostConfigBase = null;
-
-    /**
-     * The auto deploy flag for this Host.
-     */
+    /** 此Host的自动部署标志 */
     private boolean autoDeploy = true;
 
-
-    /**
-     * The Java class name of the default context configuration class for deployed web applications.
-     */
+    /** 已部署Web应用程序的默认上下文配置类的Java类名 */
     private String configClass = "org.apache.catalina.startup.ContextConfig";
 
-
-    /**
-     * The Java class name of the default Context implementation class for deployed web applications.
-     */
+    /** 已部署Web应用程序的默认Context实现类的Java类名 */
     private String contextClass = "org.apache.catalina.core.StandardContext";
 
-
-    /**
-     * The deploy on startup flag for this Host.
-     */
+    /** 此Host的启动时部署标志 */
     private boolean deployOnStartup = true;
 
-
-    /**
-     * deploy Context XML config files property.
-     */
+    /** 部署Context XML配置文件的属性 */
     private boolean deployXML = !Globals.IS_SECURITY_ENABLED;
 
-
-    /**
-     * Should XML files be copied to $CATALINA_BASE/conf/&lt;engine&gt;/&lt;host&gt; by default when a web application
-     * is deployed?
-     */
+    /** 默认情况下部署Web应用程序时是否将XML文件复制到$CATALINA_BASE/conf/&lt;engine&gt;/&lt;host&gt; */
     private boolean copyXML = false;
 
-
-    /**
-     * The Java class name of the default error reporter implementation class for deployed web applications.
-     */
+    /** 已部署Web应用程序的默认错误报告器实现类的Java类名 */
     private String errorReportValveClass = "org.apache.catalina.valves.ErrorReportValve";
 
-
-    /**
-     * Unpack WARs property.
-     */
+    /** 解压WAR文件的属性 */
     private boolean unpackWARs = true;
 
-
-    /**
-     * Work Directory base for applications.
-     */
+    /** 应用程序的工作目录基础 */
     private String workDir = null;
 
-
-    /**
-     * Should we create directories upon startup for appBase and xmlBase
-     */
+    /** 启动时是否为appBase和xmlBase创建目录 */
     private boolean createDirs = true;
 
+    /** 跟踪子Web应用程序的类加载器，以便检测内存泄漏 */
+    private final Map<ClassLoader, String> childClassLoaders = new WeakHashMap<>();
 
-    /**
-     * Track the class loaders for the child web applications so memory leaks can be detected.
-     */
-    private final Map<ClassLoader,String> childClassLoaders = new WeakHashMap<>();
-
-
-    /**
-     * Any file or directory in {@link #appBase} that this pattern matches will be ignored by the automatic deployment
-     * process (both {@link #deployOnStartup} and {@link #autoDeploy}).
-     */
+    /** 自动部署过程中忽略的文件或目录的模式 */
     private Pattern deployIgnore = null;
 
-
+    /** 是否自动取消部署旧版本应用程序的标志 */
     private boolean undeployOldVersions = false;
 
+    /** 如果Servlet启动失败，是否使Context失败的标志 */
     private boolean failCtxIfServletStartFails = false;
 
-
-    // ------------------------------------------------------------- Properties
+    // ------------------------------------------------------------- 属性方法
 
     @Override
     public boolean getUndeployOldVersions() {
         return undeployOldVersions;
     }
 
-
     @Override
     public void setUndeployOldVersions(boolean undeployOldVersions) {
         this.undeployOldVersions = undeployOldVersions;
     }
-
 
     @Override
     public ExecutorService getStartStopExecutor() {
         return startStopExecutor;
     }
 
-
     @Override
     public String getAppBase() {
         return this.appBase;
     }
 
-
     @Override
     public File getAppBaseFile() {
-
+        // 如果已缓存应用程序根目录文件，直接返回
         if (appBaseFile != null) {
             return appBaseFile;
         }
-
+        // 创建应用程序根目录文件对象
         File file = new File(getAppBase());
-
-        // If not absolute, make it absolute
+        // 如果不是绝对路径，转换为基于Catalina Base的绝对路径
         if (!file.isAbsolute()) {
             file = new File(getCatalinaBase(), file.getPath());
         }
-
-        // Make it canonical if possible
+        // 尽可能返回规范形式的文件
         try {
             file = file.getCanonicalFile();
         } catch (IOException ioe) {
-            // Ignore
+            // 忽略异常
         }
-
         this.appBaseFile = file;
         return file;
     }
 
-
     @Override
     public void setAppBase(String appBase) {
+        // 处理空应用程序根目录的情况
         if (appBase.trim().isEmpty()) {
             log.warn(sm.getString("standardHost.problematicAppBase", getName()));
         }
         String oldAppBase = this.appBase;
         this.appBase = appBase;
+        // 通知属性变更监听器
         support.firePropertyChange("appBase", oldAppBase, this.appBase);
-        this.appBaseFile = null;
+        this.appBaseFile = null; // 重置缓存
     }
-
 
     @Override
     public String getLegacyAppBase() {
         return this.legacyAppBase;
     }
 
-
     @Override
     public File getLegacyAppBaseFile() {
         if (legacyAppBaseFile != null) {
             return legacyAppBaseFile;
         }
-
         File file = new File(getLegacyAppBase());
-
-        // If not absolute, make it absolute
         if (!file.isAbsolute()) {
             file = new File(getCatalinaBase(), file.getPath());
         }
-
-        // Make it canonical if possible
         try {
             file = file.getCanonicalFile();
         } catch (IOException ioe) {
-            // Ignore
+            // 忽略异常
         }
-
         this.legacyAppBaseFile = file;
         return file;
     }
-
 
     @Override
     public void setLegacyAppBase(String legacyAppBase) {
@@ -288,15 +204,13 @@ public class StandardHost extends ContainerBase implements Host {
         String oldLegacyAppBase = this.legacyAppBase;
         this.legacyAppBase = legacyAppBase;
         support.firePropertyChange("legacyAppBase", oldLegacyAppBase, this.legacyAppBase);
-        this.legacyAppBaseFile = null;
+        this.legacyAppBaseFile = null; // 重置缓存
     }
-
 
     @Override
     public String getXmlBase() {
         return this.xmlBase;
     }
-
 
     @Override
     public void setXmlBase(String xmlBase) {
@@ -305,16 +219,17 @@ public class StandardHost extends ContainerBase implements Host {
         support.firePropertyChange("xmlBase", oldXmlBase, this.xmlBase);
     }
 
-
     @Override
     public File getConfigBaseFile() {
         if (hostConfigBase != null) {
             return hostConfigBase;
         }
         String path;
+        // 优先使用显式设置的xmlBase
         if (getXmlBase() != null) {
             path = getXmlBase();
         } else {
+            // 否则使用默认配置路径
             StringBuilder xmlDir = new StringBuilder("conf");
             Container parent = getParent();
             if (parent instanceof Engine) {
@@ -331,17 +246,16 @@ public class StandardHost extends ContainerBase implements Host {
         }
         try {
             file = file.getCanonicalFile();
-        } catch (IOException e) {// ignore
+        } catch (IOException e) {
+            // 忽略异常
         }
         this.hostConfigBase = file;
         return file;
     }
 
-
     /**
-     * {@inheritDoc}
-     * <p>
-     * The default value for this implementation is {@code true}.
+     * 获取是否在启动时创建目录的标志
+     * 此实现的默认值为true
      */
     @Override
     public boolean getCreateDirs() {
@@ -354,200 +268,165 @@ public class StandardHost extends ContainerBase implements Host {
     }
 
     /**
-     * {@inheritDoc}
-     * <p>
-     * The default value for this implementation is {@code true}.
+     * 获取自动部署标志
+     * 此实现的默认值为true
      */
     @Override
     public boolean getAutoDeploy() {
         return this.autoDeploy;
     }
 
-
     @Override
     public void setAutoDeploy(boolean autoDeploy) {
-
         boolean oldAutoDeploy = this.autoDeploy;
         this.autoDeploy = autoDeploy;
         support.firePropertyChange("autoDeploy", oldAutoDeploy, this.autoDeploy);
-
     }
-
 
     @Override
     public String getConfigClass() {
         return this.configClass;
     }
 
-
     @Override
     public void setConfigClass(String configClass) {
-
         String oldConfigClass = this.configClass;
         this.configClass = configClass;
         support.firePropertyChange("configClass", oldConfigClass, this.configClass);
-
     }
 
-
     /**
-     * @return the Java class name of the Context implementation class for new web applications.
+     * 获取新Web应用程序的Context实现类的Java类名
+     * @return Context实现类名
      */
     public String getContextClass() {
         return this.contextClass;
     }
 
-
     /**
-     * Set the Java class name of the Context implementation class for new web applications.
-     *
-     * @param contextClass The new context implementation class
+     * 设置新Web应用程序的Context实现类的Java类名
+     * @param contextClass 新的Context实现类名
      */
     public void setContextClass(String contextClass) {
-
         String oldContextClass = this.contextClass;
         this.contextClass = contextClass;
         support.firePropertyChange("contextClass", oldContextClass, this.contextClass);
-
     }
 
-
     /**
-     * {@inheritDoc}
-     * <p>
-     * The default value for this implementation is {@code true}.
+     * 获取启动时部署标志
+     * 此实现的默认值为true
      */
     @Override
     public boolean getDeployOnStartup() {
         return this.deployOnStartup;
     }
 
-
     @Override
     public void setDeployOnStartup(boolean deployOnStartup) {
-
         boolean oldDeployOnStartup = this.deployOnStartup;
         this.deployOnStartup = deployOnStartup;
         support.firePropertyChange("deployOnStartup", oldDeployOnStartup, this.deployOnStartup);
-
     }
 
-
     /**
-     * @return <code>true</code> if XML context descriptors should be deployed.
+     * 获取是否应部署XML上下文描述符的标志
+     * @return 若应部署XML上下文描述符则为true
      */
     public boolean isDeployXML() {
         return deployXML;
     }
 
-
     /**
-     * Deploy XML Context config files flag mutator.
-     *
-     * @param deployXML <code>true</code> if context descriptors should be deployed
+     * 设置是否应部署XML上下文描述符的标志
+     * @param deployXML 新的部署XML标志
      */
     public void setDeployXML(boolean deployXML) {
         this.deployXML = deployXML;
     }
 
-
     /**
-     * @return the copy XML config file flag for this component.
+     * 获取此组件的复制XML配置文件标志
+     * @return 复制XML标志
      */
     public boolean isCopyXML() {
         return this.copyXML;
     }
 
-
     /**
-     * Set the copy XML config file flag for this component.
-     *
-     * @param copyXML The new copy XML flag
+     * 设置此组件的复制XML配置文件标志
+     * @param copyXML 新的复制XML标志
      */
     public void setCopyXML(boolean copyXML) {
         this.copyXML = copyXML;
     }
 
-
     /**
-     * @return the Java class name of the error report valve class for new web applications.
+     * 获取新Web应用程序的错误报告Valve类的Java类名
+     * @return 错误报告Valve类名
      */
     public String getErrorReportValveClass() {
         return this.errorReportValveClass;
     }
 
-
     /**
-     * Set the Java class name of the error report valve class for new web applications.
-     *
-     * @param errorReportValveClass The new error report valve class
+     * 设置新Web应用程序的错误报告Valve类的Java类名
+     * @param errorReportValveClass 新的错误报告Valve类名
      */
     public void setErrorReportValveClass(String errorReportValveClass) {
-
         String oldErrorReportValveClassClass = this.errorReportValveClass;
         this.errorReportValveClass = errorReportValveClass;
         support.firePropertyChange("errorReportValveClass", oldErrorReportValveClassClass, this.errorReportValveClass);
-
     }
-
 
     @Override
     public String getName() {
         return name;
     }
 
-
     @Override
     public void setName(String name) {
-
         if (name == null) {
             throw new IllegalArgumentException(sm.getString("standardHost.nullName"));
         }
-
-        name = name.toLowerCase(Locale.ENGLISH); // Internally all names are lower case
-
+        // 内部所有名称均为小写
+        name = name.toLowerCase(Locale.ENGLISH);
         String oldName = this.name;
         this.name = name;
         support.firePropertyChange("name", oldName, this.name);
-
     }
 
-
     /**
-     * @return <code>true</code> if WARs should be unpacked on deployment.
+     * 获取部署时是否应解压WAR文件的标志
+     * @return 若应解压WAR文件则为true
      */
     public boolean isUnpackWARs() {
         return unpackWARs;
     }
 
-
     /**
-     * Unpack WARs flag mutator.
-     *
-     * @param unpackWARs <code>true</code> to unpack WARs on deployment
+     * 设置部署时是否应解压WAR文件的标志
+     * @param unpackWARs 新的解压WAR文件标志
      */
     public void setUnpackWARs(boolean unpackWARs) {
         this.unpackWARs = unpackWARs;
     }
 
-
     /**
-     * @return host work directory base.
+     * 获取主机工作目录基础
+     * @return 工作目录基础路径
      */
     public String getWorkDir() {
         return workDir;
     }
 
-
     /**
-     * Set host work directory base.
-     *
-     * @param workDir the new base work folder for this host
+     * 设置主机工作目录基础
+     * @param workDir 此主机新的基础工作文件夹
      */
     public void setWorkDir(String workDir) {
         this.workDir = workDir;
     }
-
 
     @Override
     public String getDeployIgnore() {
@@ -557,12 +436,10 @@ public class StandardHost extends ContainerBase implements Host {
         return this.deployIgnore.toString();
     }
 
-
     @Override
     public Pattern getDeployIgnorePattern() {
         return this.deployIgnore;
     }
-
 
     @Override
     public void setDeployIgnore(String deployIgnore) {
@@ -580,85 +457,69 @@ public class StandardHost extends ContainerBase implements Host {
         support.firePropertyChange("deployIgnore", oldDeployIgnore, deployIgnore);
     }
 
-
     /**
-     * @return <code>true</code> if a webapp start should fail if a Servlet startup fails
+     * 获取如果Servlet启动失败是否使Context失败的标志
+     * @return 若Servlet启动失败则使Context失败为true
      */
     public boolean isFailCtxIfServletStartFails() {
         return failCtxIfServletStartFails;
     }
 
-
     /**
-     * Change the behavior of Servlet startup errors on web application starts.
-     *
-     * @param failCtxIfServletStartFails <code>false</code> to ignore errors on Servlets which are stated when the web
-     *                                       application starts
+     * 设置Web应用程序启动时Servlet启动错误的行为
+     * @param failCtxIfServletStartFails 若为false，忽略Web应用程序启动时声明的Servlet错误
      */
     public void setFailCtxIfServletStartFails(boolean failCtxIfServletStartFails) {
         boolean oldFailCtxIfServletStartFails = this.failCtxIfServletStartFails;
         this.failCtxIfServletStartFails = failCtxIfServletStartFails;
-        support.firePropertyChange("failCtxIfServletStartFails", oldFailCtxIfServletStartFails,
-                failCtxIfServletStartFails);
+        support.firePropertyChange("failCtxIfServletStartFails", oldFailCtxIfServletStartFails, failCtxIfServletStartFails);
     }
 
-
-    // --------------------------------------------------------- Public Methods
-
+    // --------------------------------------------------------- 公共方法
 
     @Override
     public void addAlias(String alias) {
-
+        // 转换为小写以保持一致性
         alias = alias.toLowerCase(Locale.ENGLISH);
-
         synchronized (aliasesLock) {
-            // Skip duplicate aliases
+            // 跳过重复的别名
             for (String s : aliases) {
                 if (s.equals(alias)) {
                     return;
                 }
             }
-            // Add this alias to the list
+            // 添加此别名到列表
             String[] newAliases = Arrays.copyOf(aliases, aliases.length + 1);
             newAliases[aliases.length] = alias;
             aliases = newAliases;
         }
-        // Inform interested listeners
+        // 通知感兴趣的监听器
         fireContainerEvent(ADD_ALIAS_EVENT, alias);
-
     }
 
-
     /**
-     * {@inheritDoc}
-     * <p>
-     * The child must be an implementation of <code>Context</code>.
+     * 添加子容器
+     * 子容器必须是Context实现
      */
     @Override
     public void addChild(Container child) {
-
         if (!(child instanceof Context)) {
             throw new IllegalArgumentException(sm.getString("standardHost.notContext"));
         }
-
+        // 添加生命周期监听器以跟踪内存泄漏
         child.addLifecycleListener(new MemoryLeakTrackingListener());
-
-        // Avoid NPE for case where Context is defined in server.xml with only a
-        // docBase
+        // 处理Context路径为null的情况
         Context context = (Context) child;
         if (context.getPath() == null) {
             ContextName cn = new ContextName(context.getDocBase(), true);
             context.setPath(cn.getPath());
         }
-
         super.addChild(child);
-
     }
 
-
     /**
-     * Used to ensure that regardless of {@link Context} implementation, a record is kept of the class loader used every
-     * time a context starts.
+     * 内存泄漏跟踪监听器
+     * 用于确保无论Context实现如何，每次Context启动时都记录使用的类加载器
      */
     private class MemoryLeakTrackingListener implements LifecycleListener {
         @Override
@@ -666,28 +527,25 @@ public class StandardHost extends ContainerBase implements Host {
             if (event.getType().equals(AFTER_START_EVENT)) {
                 if (event.getSource() instanceof Context) {
                     Context context = ((Context) event.getSource());
+                    // 记录Context的类加载器以检测内存泄漏
                     childClassLoaders.put(context.getLoader().getClassLoader(),
-                            context.getServletContext().getContextPath());
+                        context.getServletContext().getContextPath());
                 }
             }
         }
     }
 
-
     /**
-     * Attempt to identify the contexts that have a class loader memory leak. This is usually triggered on context
-     * reload. Note: This method attempts to force a full garbage collection. This should be used with extreme caution
-     * on a production system.
-     *
-     * @return an array of possibly leaking contexts
+     * 尝试识别有类加载器内存泄漏的Context
+     * 通常在Context重新加载时触发
+     * 注意：此方法尝试强制完全垃圾回收，在生产系统上应谨慎使用
+     * @return 可能泄漏的Context数组
      */
     public String[] findReloadedContextMemoryLeaks() {
-
-        System.gc();
-
+        System.gc(); // 强制垃圾回收
         List<String> result = new ArrayList<>();
-
-        for (Map.Entry<ClassLoader,String> entry : childClassLoaders.entrySet()) {
+        // 检查所有子Context的类加载器状态
+        for (Map.Entry<ClassLoader, String> entry : childClassLoaders.entrySet()) {
             ClassLoader cl = entry.getKey();
             if (cl instanceof WebappClassLoaderBase) {
                 if (!((WebappClassLoaderBase) cl).getState().isAvailable()) {
@@ -695,7 +553,6 @@ public class StandardHost extends ContainerBase implements Host {
                 }
             }
         }
-
         return result.toArray(new String[0]);
     }
 
@@ -706,15 +563,11 @@ public class StandardHost extends ContainerBase implements Host {
         }
     }
 
-
     @Override
     public void removeAlias(String alias) {
-
         alias = alias.toLowerCase(Locale.ENGLISH);
-
         synchronized (aliasesLock) {
-
-            // Make sure this alias is currently present
+            // 确保此别名当前存在
             int n = -1;
             for (int i = 0; i < aliases.length; i++) {
                 if (aliases[i].equals(alias)) {
@@ -725,8 +578,7 @@ public class StandardHost extends ContainerBase implements Host {
             if (n < 0) {
                 return;
             }
-
-            // Remove the specified alias
+            // 移除指定的别名
             int j = 0;
             String[] results = new String[aliases.length - 1];
             for (int i = 0; i < aliases.length; i++) {
@@ -735,24 +587,20 @@ public class StandardHost extends ContainerBase implements Host {
                 }
             }
             aliases = results;
-
         }
-
-        // Inform interested listeners
+        // 通知感兴趣的监听器
         fireContainerEvent(REMOVE_ALIAS_EVENT, alias);
-
     }
-
 
     @Override
     protected void startInternal() throws LifecycleException {
-
-        // Set error report valve
+        // 设置错误报告Valve
         String errorValve = getErrorReportValveClass();
         if ((errorValve != null) && (!errorValve.isEmpty())) {
             try {
                 boolean found = false;
                 Valve[] valves = getPipeline().getValves();
+                // 检查是否已存在指定的错误报告Valve
                 for (Valve valve : valves) {
                     if (errorValve.equals(valve.getClass().getName())) {
                         found = true;
@@ -760,8 +608,9 @@ public class StandardHost extends ContainerBase implements Host {
                     }
                 }
                 if (!found) {
+                    // 创建并添加错误报告Valve
                     Valve valve = ErrorReportValve.class.getName().equals(errorValve) ? new ErrorReportValve() :
-                            (Valve) Class.forName(errorValve).getConstructor().newInstance();
+                        (Valve) Class.forName(errorValve).getConstructor().newInstance();
                     getPipeline().addValve(valve);
                 }
             } catch (Throwable t) {
@@ -769,15 +618,15 @@ public class StandardHost extends ContainerBase implements Host {
                 log.error(sm.getString("standardHost.invalidErrorReportValveClass", errorValve), t);
             }
         }
-        super.startInternal();
+        super.startInternal(); // 调用父类启动方法
     }
 
+    // -------------------- JMX相关方法 --------------------
 
-    // -------------------- JMX --------------------
     /**
-     * @return the MBean Names of the Valves associated with this Host
-     *
-     * @exception Exception if an MBean cannot be created or registered
+     * 获取与此Host关联的Valves的MBean名称
+     * @return Valve的MBean名称数组
+     * @exception Exception 如果无法创建或注册MBean
      */
     public String[] getValveNames() throws Exception {
         Valve[] valves = this.getPipeline().getValves();
@@ -790,7 +639,6 @@ public class StandardHost extends ContainerBase implements Host {
                 }
             }
         }
-
         return mbeanNames;
     }
 
@@ -804,5 +652,4 @@ public class StandardHost extends ContainerBase implements Host {
     protected String getObjectNameKeyProperties() {
         return "type=Host" + getMBeanKeyProperties();
     }
-
 }
