@@ -16,336 +16,300 @@
  */
 package org.apache.catalina;
 
-
 import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.Servlet;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.UnavailableException;
 
-
 /**
- * A <b>Wrapper</b> is a Container that represents an individual servlet definition from the deployment descriptor of
- * the web application. It provides a convenient mechanism to use Interceptors that see every single request to the
- * servlet represented by this definition.
- * <p>
- * Implementations of Wrapper are responsible for managing the servlet life cycle for their underlying servlet class,
- * including calling init() and destroy() at appropriate times.
- * <p>
- * The parent Container attached to a Wrapper will generally be an implementation of Context, representing the servlet
- * context (and therefore the web application) within which this servlet executes.
- * <p>
- * Child Containers are not allowed on Wrapper implementations, so the <code>addChild()</code> method should throw an
- * <code>IllegalArgumentException</code>.
+ * Wrapper接口表示Web应用部署描述符中的单个Servlet定义，是一个容器组件。
+ * 它提供了拦截器机制来处理所有发往该Servlet的请求，并负责管理Servlet的生命周期（初始化和销毁）。
+ * Wrapper的父容器通常是Context实现，表示该Servlet执行的Servlet上下文（即Web应用）。
+ * 注意：Wrapper不允许有子容器，因此addChild()方法应抛出IllegalArgumentException。
  *
  * @author Craig R. McClanahan
  */
 public interface Wrapper extends Container {
 
-    /**
-     * Container event for adding a wrapper.
-     */
+    /** 添加Wrapper映射时触发的容器事件 */
     String ADD_MAPPING_EVENT = "addMapping";
 
-    /**
-     * Container event for removing a wrapper.
-     */
+    /** 移除Wrapper映射时触发的容器事件 */
     String REMOVE_MAPPING_EVENT = "removeMapping";
 
-    // ------------------------------------------------------------- Properties
-
+    // ------------------------------------------------------------- 属性方法
 
     /**
-     * @return the available date/time for this servlet, in milliseconds since the epoch. If this date/time is in the
-     *             future, any request for this servlet will return an SC_SERVICE_UNAVAILABLE error. If it is zero, the
-     *             servlet is currently available. A value equal to Long.MAX_VALUE is considered to mean that
-     *             unavailability is permanent.
+     * 获取Servlet可用时间（从纪元开始的毫秒数）
+     * - 若时间在未来：请求返回SC_SERVICE_UNAVAILABLE错误
+     * - 若值为0：Servlet当前可用
+     * - 若值为Long.MAX_VALUE：表示永久不可用
+     *
+     * @return Servlet可用时间戳
      */
     long getAvailable();
 
-
     /**
-     * Set the available date/time for this servlet, in milliseconds since the epoch. If this date/time is in the
-     * future, any request for this servlet will return an SC_SERVICE_UNAVAILABLE error. A value equal to Long.MAX_VALUE
-     * is considered to mean that unavailability is permanent.
+     * 设置Servlet可用时间（从纪元开始的毫秒数）
+     * - 若时间在未来：请求返回SC_SERVICE_UNAVAILABLE错误
+     * - 若值为Long.MAX_VALUE：表示永久不可用
      *
-     * @param available The new available date/time
+     * @param available 新的可用时间戳
      */
     void setAvailable(long available);
 
-
     /**
-     * @return the load-on-startup order value (negative value means load on first call).
+     * 获取Servlet的加载顺序值（负值表示首次调用时加载）
+     *
+     * @return 加载顺序值
      */
     int getLoadOnStartup();
 
-
     /**
-     * Set the load-on-startup order value (negative value means load on first call).
+     * 设置Servlet的加载顺序值（负值表示首次调用时加载）
      *
-     * @param value New load-on-startup value
+     * @param value 新的加载顺序值
      */
     void setLoadOnStartup(int value);
 
-
     /**
-     * @return the run-as identity for this servlet.
+     * 获取Servlet的运行身份（run-as角色）
+     *
+     * @return run-as身份名称
      */
     String getRunAs();
 
-
     /**
-     * Set the run-as identity for this servlet.
+     * 设置Servlet的运行身份（run-as角色）
      *
-     * @param runAs New run-as identity value
+     * @param runAs 新的run-as身份名称
      */
     void setRunAs(String runAs);
 
-
     /**
-     * @return the fully qualified servlet class name for this servlet.
+     * 获取Servlet的完整类名
+     *
+     * @return Servlet类的全限定名
      */
     String getServletClass();
 
-
     /**
-     * Set the fully qualified servlet class name for this servlet.
+     * 设置Servlet的完整类名
      *
-     * @param servletClass Servlet class name
+     * @param servletClass Servlet类的全限定名
      */
     void setServletClass(String servletClass);
 
-
     /**
-     * Gets the names of the methods supported by the underlying servlet. This is the same set of methods included in
-     * the Allow response header in response to an OPTIONS request method processed by the underlying servlet.
+     * 获取Servlet支持的HTTP方法列表（用于OPTIONS请求的Allow响应头）
      *
-     * @return Array of names of the methods supported by the underlying servlet
-     *
-     * @throws ServletException If the target servlet cannot be loaded
+     * @return Servlet支持的方法数组
+     * @throws ServletException 当无法加载目标Servlet时抛出
      */
     String[] getServletMethods() throws ServletException;
 
-
     /**
-     * @return <code>true</code> if this Servlet is currently unavailable.
+     * 判断Servlet是否当前不可用
+     *
+     * @return true表示不可用，false表示可用
      */
     boolean isUnavailable();
 
-
     /**
-     * @return the associated Servlet instance.
+     * 获取关联的Servlet实例
+     *
+     * @return Servlet实例
      */
     Servlet getServlet();
 
-
     /**
-     * Set the associated Servlet instance
+     * 设置关联的Servlet实例
      *
-     * @param servlet The associated Servlet
+     * @param servlet 要关联的Servlet实例
      */
     void setServlet(Servlet servlet);
 
-    // --------------------------------------------------------- Public Methods
-
+    // --------------------------------------------------------- 公共方法
 
     /**
-     * Add a new servlet initialization parameter for this servlet.
+     * 添加Servlet初始化参数
      *
-     * @param name  Name of this initialization parameter to add
-     * @param value Value of this initialization parameter to add
+     * @param name 初始化参数名称
+     * @param value 初始化参数值
      */
     void addInitParameter(String name, String value);
 
-
     /**
-     * Add a mapping associated with the Wrapper.
+     * 添加Wrapper映射路径
      *
-     * @param mapping The new wrapper mapping
+     * @param mapping 新的映射路径
      */
     void addMapping(String mapping);
 
-
     /**
-     * Add a new security role reference record to the set of records for this servlet.
+     * 添加安全角色引用（Servlet内部角色与Web应用角色的映射）
      *
-     * @param name Role name used within this servlet
-     * @param link Role name used within the web application
+     * @param name Servlet内部使用的角色名
+     * @param link Web应用中实际的角色名
      */
     void addSecurityReference(String name, String link);
 
-
     /**
-     * Allocate an initialized instance of this Servlet that is ready to have its <code>service()</code> method called.
-     * The previously initialized instance may be returned immediately.
+     * 分配一个已初始化的Servlet实例（可直接调用service方法）
+     * 可能返回之前已初始化的实例
      *
-     * @exception ServletException if the Servlet init() method threw an exception
-     * @exception ServletException if a loading error occurs
-     *
-     * @return a new Servlet instance
+     * @return 新的Servlet实例
+     * @throws ServletException Servlet初始化失败或加载错误时抛出
      */
     Servlet allocate() throws ServletException;
 
-
     /**
-     * Decrement the allocation count for the servlet instance.
+     * 减少Servlet实例的分配计数（返回实例到池）
      *
-     * @param servlet The servlet to be returned
-     *
-     * @exception ServletException if a deallocation error occurs
+     * @param servlet 要返回的Servlet实例
+     * @throws ServletException 释放实例时发生错误
      */
     void deallocate(Servlet servlet) throws ServletException;
 
-
     /**
-     * @return the value for the specified initialization parameter name, if any; otherwise return <code>null</code>.
+     * 查找指定名称的初始化参数值
      *
-     * @param name Name of the requested initialization parameter
+     * @param name 初始化参数名称
+     * @return 参数值（不存在时返回null）
      */
     String findInitParameter(String name);
 
-
     /**
-     * @return the names of all defined initialization parameters for this servlet.
+     * 获取所有初始化参数的名称
+     *
+     * @return 初始化参数名称数组
      */
     String[] findInitParameters();
 
-
     /**
-     * @return the mappings associated with this wrapper.
+     * 获取Wrapper关联的所有映射路径
+     *
+     * @return 映射路径数组
      */
     String[] findMappings();
 
-
     /**
-     * @return the security role link for the specified security role reference name, if any; otherwise return
-     *             <code>null</code>.
+     * 查找指定安全角色引用对应的Web应用角色名
      *
-     * @param name Security role reference used within this servlet
+     * @param name Servlet内部使用的角色名
+     * @return Web应用中的角色名（不存在时返回null）
      */
     String findSecurityReference(String name);
 
-
     /**
-     * @return the array of security role reference names associated with this servlet, if any; otherwise return a
-     *             zero-length array.
+     * 获取所有安全角色引用名称
+     *
+     * @return 安全角色引用名称数组
      */
     String[] findSecurityReferences();
 
-
     /**
-     * Increment the error count value used when monitoring.
+     * 增加错误计数（用于监控）
      */
     void incrementErrorCount();
 
-
     /**
-     * Load and initialize an instance of this Servlet, if there is not already at least one initialized instance. This
-     * can be used, for example, to load Servlets that are marked in the deployment descriptor to be loaded at server
-     * startup time.
+     * 加载并初始化Servlet实例（若尚未初始化）
+     * 用于加载部署描述符中标记为启动时加载的Servlet
      *
-     * @exception ServletException if the Servlet init() method threw an exception or if some other loading problem
-     *                                 occurs
+     * @throws ServletException Servlet初始化失败或加载错误时抛出
      */
     void load() throws ServletException;
 
-
     /**
-     * Remove the specified initialization parameter from this Servlet.
+     * 移除指定的初始化参数
      *
-     * @param name Name of the initialization parameter to remove
+     * @param name 要移除的初始化参数名称
      */
     void removeInitParameter(String name);
 
-
     /**
-     * Remove a mapping associated with the wrapper.
+     * 移除Wrapper映射路径
      *
-     * @param mapping The pattern to remove
+     * @param mapping 要移除的映射路径
      */
     void removeMapping(String mapping);
 
-
     /**
-     * Remove any security role reference for the specified role name.
+     * 移除指定的安全角色引用
      *
-     * @param name Security role used within this servlet to be removed
+     * @param name 要移除的安全角色名
      */
     void removeSecurityReference(String name);
 
-
     /**
-     * Process an UnavailableException, marking this Servlet as unavailable for the specified amount of time.
+     * 处理UnavailableException，标记Servlet为不可用
      *
-     * @param unavailable The exception that occurred, or <code>null</code> to mark this Servlet as permanently
-     *                        unavailable
+     * @param unavailable 不可用异常（null表示永久不可用）
      */
     void unavailable(UnavailableException unavailable);
 
-
     /**
-     * Unload all initialized instances of this servlet, after calling the <code>destroy()</code> method for each
-     * instance. This can be used, for example, prior to shutting down the entire servlet engine, or prior to reloading
-     * all of the classes from the Loader associated with our Loader's repository.
+     * 卸载所有已初始化的Servlet实例（调用每个实例的destroy方法）
+     * 用于Servlet引擎关闭或类重新加载前
      *
-     * @exception ServletException if an unload error occurs
+     * @throws ServletException 卸载过程中发生错误
      */
     void unload() throws ServletException;
 
-
     /**
-     * @return the multipart configuration for the associated Servlet. If no multipart configuration has been defined,
-     *             then <code>null</code> will be returned.
+     * 获取Servlet的多部分配置
+     *
+     * @return MultipartConfigElement实例（未定义时返回null）
      */
     MultipartConfigElement getMultipartConfigElement();
 
-
     /**
-     * Set the multipart configuration for the associated Servlet. To clear the multipart configuration specify
-     * <code>null</code> as the new value.
+     * 设置Servlet的多部分配置
      *
-     * @param multipartConfig The configuration associated with the Servlet
+     * @param multipartConfig 多部分配置（null表示清除配置）
      */
     void setMultipartConfigElement(MultipartConfigElement multipartConfig);
 
     /**
-     * Does the associated Servlet support async processing? Defaults to <code>false</code>.
+     * 判断Servlet是否支持异步处理
      *
-     * @return <code>true</code> if the Servlet supports async
+     * @return true表示支持异步处理
      */
     boolean isAsyncSupported();
 
     /**
-     * Set the async support for the associated Servlet.
+     * 设置Servlet的异步处理支持状态
      *
-     * @param asyncSupport the new value
+     * @param asyncSupport 新的异步支持状态
      */
     void setAsyncSupported(boolean asyncSupport);
 
     /**
-     * Is the associated Servlet enabled? Defaults to <code>true</code>.
+     * 判断Servlet是否启用
      *
-     * @return <code>true</code> if the Servlet is enabled
+     * @return true表示已启用
      */
     boolean isEnabled();
 
     /**
-     * Sets the enabled attribute for the associated servlet.
+     * 设置Servlet的启用状态
      *
-     * @param enabled the new value
+     * @param enabled 新的启用状态
      */
     void setEnabled(boolean enabled);
 
     /**
-     * Is the Servlet overridable by a ServletContainerInitializer?
+     * 判断Servlet是否可被ServletContainerInitializer覆盖
      *
-     * @return <code>true</code> if the Servlet can be overridden in a ServletContainerInitializer
+     * @return true表示可覆盖
      */
     boolean isOverridable();
 
     /**
-     * Sets the overridable attribute for this Servlet.
+     * 设置Servlet的可覆盖状态
      *
-     * @param overridable the new value
+     * @param overridable 新的可覆盖状态
      */
     void setOverridable(boolean overridable);
 }
