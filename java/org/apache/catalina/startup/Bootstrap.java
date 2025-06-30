@@ -30,6 +30,9 @@ import org.apache.catalina.startup.ClassLoaderFactory.RepositoryType; // 导入�
 import org.apache.juli.logging.Log; // 导入日志接口
 import org.apache.juli.logging.LogFactory; // 导入日志工厂类
 /**
+ *
+ */
+/**
  * 阅读的流程
  * 1. 启动阶段（服务器初始化）
  * org.apache.catalina.startup.Bootstrap          // 启动入口类

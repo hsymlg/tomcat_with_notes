@@ -311,6 +311,7 @@ public final class StandardServer extends LifecycleMBeanBase implements Server {
             try { service.start(); } catch (LifecycleException e) {}
         }
         // 触发属性变更事件，通知监听器
+        // firePropertyChange 方法遍历所有注册的监听器，并调用它们的 propertyChange 方法，传递变更事件
         support.firePropertyChange("service", null, service);
     }
 

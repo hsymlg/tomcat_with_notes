@@ -1,18 +1,5 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Apache许可证声明：该文件遵循Apache License 2.0协议，允许在合规条件下使用、修改和分发
  */
 package org.apache.catalina.connector;
 
@@ -22,9 +9,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashSet;
-
 import javax.management.ObjectName;
-
 import org.apache.catalina.Globals;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleState;
@@ -50,752 +35,321 @@ import org.apache.tomcat.util.net.openssl.OpenSSLImplementation;
 import org.apache.tomcat.util.net.openssl.OpenSSLStatus;
 import org.apache.tomcat.util.res.StringManager;
 
-
 /**
- * Implementation of a Coyote connector.
- *
- * @author Craig R. McClanahan
- * @author Remy Maucherat
+ * Coyote连接器实现类：负责处理网络连接、请求解析和协议转换
+ * @author Craig R. McClanahan, Remy Maucherat
  */
 public class Connector extends LifecycleMBeanBase {
-
+    // 日志工具，用于记录运行时信息
     private static final Log log = LogFactory.getLog(Connector.class);
 
-
+    // 内部线程池名称，用于标识Tomcat内置的执行器
     public static final String INTERNAL_EXECUTOR_NAME = "Internal";
 
-
-    // ------------------------------------------------------------ Constructor
-
+    // --------------------------- 构造函数 ---------------------------
     /**
-     * Defaults to using HTTP/1.1 NIO implementation.
+     * 默认构造函数：使用HTTP/1.1 NIO协议
      */
     public Connector() {
-        this("HTTP/1.1");
+        this("HTTP/1.1"); // 调用带协议参数的构造函数
     }
 
-
+    /**
+     * 带协议参数的构造函数
+     * @param protocol 指定使用的协议（如"HTTP/1.1"、"AJP/1.3"）
+     */
     public Connector(String protocol) {
-        configuredProtocol = protocol;
+        configuredProtocol = protocol; // 保存配置的协议名称
         ProtocolHandler p = null;
         try {
+            // 通过协议名称创建对应的协议处理器
             p = ProtocolHandler.create(protocol);
         } catch (Exception e) {
+            // 处理协议处理器创建失败的情况
             log.error(sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"), e);
         }
         if (p != null) {
-            protocolHandler = p;
-            protocolHandlerClassName = protocolHandler.getClass().getName();
+            protocolHandler = p; // 保存协议处理器实例
+            protocolHandlerClassName = protocolHandler.getClass().getName(); // 记录类名
         } else {
             protocolHandler = null;
-            protocolHandlerClassName = protocol;
+            protocolHandlerClassName = protocol; // 若创建失败，使用协议名作为类名
         }
-        // Default for Connector depends on this system property
+        // 设置初始化失败时是否退出JVM，默认读取系统属性
         setThrowOnFailure(Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE"));
     }
-
-
-    public Connector(ProtocolHandler protocolHandler) {
-        protocolHandlerClassName = protocolHandler.getClass().getName();
-        configuredProtocol = protocolHandlerClassName;
-        this.protocolHandler = protocolHandler;
-        // Default for Connector depends on this system property
-        setThrowOnFailure(Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE"));
-    }
-
-
-    // ----------------------------------------------------- Instance Variables
 
     /**
-     * The <code>Service</code> we are associated with (if any).
+     * 带协议处理器的构造函数，用于自定义协议实现
+     * @param protocolHandler 预创建的协议处理器实例
      */
+    public Connector(ProtocolHandler protocolHandler) {
+        protocolHandlerClassName = protocolHandler.getClass().getName(); // 记录类名
+        configuredProtocol = protocolHandlerClassName; // 使用类名作为配置协议
+        this.protocolHandler = protocolHandler; // 保存协议处理器
+        // 同上：设置初始化失败时的退出策略
+        setThrowOnFailure(Boolean.getBoolean("org.apache.catalina.startup.EXIT_ON_INIT_FAILURE"));
+    }
+
+    // --------------------------- 实例变量 ---------------------------
+    /** 关联的Service组件（一个Service可包含多个Connector） */
     protected Service service = null;
 
-
-    /**
-     * If this is <code>true</code> the '\' character will be permitted as a path delimiter. If not specified, the
-     * default value of <code>false</code> will be used.
-     */
+    /** 是否允许URL中使用反斜杠（默认false，安全考虑） */
     protected boolean allowBackslash = false;
 
-
-    /**
-     * Do we allow TRACE ?
-     */
+    /** 是否允许TRACE HTTP方法（默认false，避免安全风险） */
     protected boolean allowTrace = false;
 
-
-    /**
-     * Default timeout for asynchronous requests (ms).
-     */
+    /** 异步请求的默认超时时间（毫秒，默认30000ms） */
     protected long asyncTimeout = 30000;
 
-
-    /**
-     * The "enable DNS lookups" flag for this Connector.
-     */
+    /** 是否启用DNS反向查询（默认false，性能考虑） */
     protected boolean enableLookups = false;
 
-
-    /**
-     * If this is <code>true</code> then a call to <code>Response.getWriter()</code> if no character encoding has been
-     * specified will result in subsequent calls to <code>Response.getCharacterEncoding()</code> returning
-     * <code>ISO-8859-1</code> and the <code>Content-Type</code> response header will include a
-     * <code>charset=ISO-8859-1</code> component. (SRV.15.2.22.1) If not specified, the default specification compliant
-     * value of <code>true</code> will be used.
-     */
+    /** 当未指定字符编码时，是否强制使用ISO-8859-1（默认true，符合Servlet规范） */
     protected boolean enforceEncodingInGetWriter = true;
 
-
-    /**
-     * Is generation of X-Powered-By response header enabled/disabled?
-     */
+    /** 是否生成X-Powered-By响应头（默认false，避免暴露技术栈） */
     protected boolean xpoweredBy = false;
 
-
-    /**
-     * The server name to which we should pretend requests to this Connector were directed. This is useful when
-     * operating Tomcat behind a proxy server, so that redirects get constructed accurately. If not specified, the
-     * server name included in the <code>Host</code> header is used.
-     */
+    /** 代理服务器的名称（用于反向代理场景下的URL重定向） */
     protected String proxyName = null;
 
-
-    /**
-     * The server port to which we should pretend requests to this Connector were directed. This is useful when
-     * operating Tomcat behind a proxy server, so that redirects get constructed accurately. If not specified, the port
-     * number specified by the <code>port</code> property is used.
-     */
+    /** 代理服务器的端口（用于反向代理场景下的URL重定向） */
     protected int proxyPort = 0;
 
-
-    /**
-     * The flag that controls recycling of the facades of the request processing objects. If set to <code>true</code>
-     * the object facades will be discarded when the request is recycled. If the security manager is enabled, this
-     * setting is ignored and object facades are always discarded.
-     */
+    /** 是否回收请求处理对象的门面（默认true，安全管理器启用时强制回收） */
     protected boolean discardFacades = true;
 
-
-    /**
-     * The redirect port for non-SSL to SSL redirects.
-     */
+    /** 非SSL请求重定向到SSL的目标端口（默认443） */
     protected int redirectPort = 443;
 
-
-    /**
-     * The request scheme that will be set on all requests received through this connector.
-     */
+    /** 请求的默认协议（http/https） */
     protected String scheme = "http";
 
-
-    /**
-     * The secure connection flag that will be set on all requests received through this connector.
-     */
+    /** 请求的安全标志（是否为HTTPS连接） */
     protected boolean secure = false;
 
-
-    /**
-     * The string manager for this package.
-     */
+    /** 字符串资源管理器，用于国际化提示信息 */
     protected static final StringManager sm = StringManager.getManager(Connector.class);
 
-
-    /**
-     * The maximum number of cookies permitted for a request. Use a value less than zero for no limit. Defaults to 200.
-     */
+    /** 最大允许的Cookie数量（默认200，-1表示无限制） */
     private int maxCookieCount = 200;
 
-    /**
-     * The maximum number of parameters (GET plus POST) which will be automatically parsed by the container. 10000 by
-     * default. The default Tomcat server.xml configures a lower default of 1000. A value of less than 0 means no limit.
-     */
+    /** 最大允许的参数数量（GET+POST，默认10000，-1无限制） */
     protected int maxParameterCount = 10000;
 
+    /** 最大文件上传部件数量（默认10） */
     private int maxPartCount = 10;
 
+    /** 最大部件头大小（字节，默认512） */
     private int maxPartHeaderSize = 512;
 
-    /**
-     * Maximum size of a POST which will be automatically parsed by the container. 2 MiB by default.
-     */
+    /** 自动解析的POST请求最大大小（默认2MB） */
     protected int maxPostSize = 2 * 1024 * 1024;
 
-
-    /**
-     * Maximum size of a POST which will be saved by the container during authentication. 4 KiB by default
-     */
+    /** 认证时保存的POST请求最大大小（默认4KB） */
     protected int maxSavePostSize = 4 * 1024;
 
-    /**
-     * Comma-separated list of HTTP methods that will be parsed according to POST-style rules for
-     * application/x-www-form-urlencoded request bodies.
-     */
+    /** 需要按POST规则解析请求体的HTTP方法列表（默认"POST"） */
     protected String parseBodyMethods = "POST";
 
-    /**
-     * A Set of methods determined by {@link #parseBodyMethods}.
-     */
+    /** 解析请求体的方法集合（由parseBodyMethods转换而来） */
     protected HashSet<String> parseBodyMethodsSet;
 
-
-    /**
-     * Flag to use IP-based virtual hosting.
-     */
+    /** 是否启用基于IP的虚拟主机（默认false，使用域名） */
     protected boolean useIPVHosts = false;
 
-
-    /**
-     * Coyote Protocol handler class name. See {@link #Connector()} for current default.
-     */
+    /** 协议处理器的类名（构造时确定，不可变） */
     protected final String protocolHandlerClassName;
 
-
-    /**
-     * Name of the protocol that was configured.
-     */
+    /** 配置的协议名称（构造时确定，不可变） */
     protected final String configuredProtocol;
 
-
-    /**
-     * Coyote protocol handler.
-     */
+    /** 协议处理器实例（处理网络连接和请求解析） */
     protected final ProtocolHandler protocolHandler;
 
-
-    /**
-     * Coyote adapter.
-     */
+    /** Coyote适配器，连接协议处理器和容器 */
     protected Adapter adapter = null;
 
-
-    /**
-     * The URI encoding in use.
-     */
+    /** URI的字符编码（默认UTF-8） */
     private Charset uriCharset = StandardCharsets.UTF_8;
 
-
-    /**
-     * The behavior when an encoded reverse solidus (backslash - \) is submitted.
-     */
+    /** 处理编码反斜杠（\）的策略 */
     private EncodedSolidusHandling encodedReverseSolidusHandling = EncodedSolidusHandling.DECODE;
 
-
-    /**
-     * The behavior when an encoded solidus (slash - /) is submitted.
-     */
+    /** 处理编码斜杠（/）的策略（默认REJECT，拒绝非法编码） */
     private EncodedSolidusHandling encodedSolidusHandling = EncodedSolidusHandling.REJECT;
 
-
-    /**
-     * URI encoding as body.
-     */
+    /** 是否使用请求体编码作为URI编码（默认false） */
     protected boolean useBodyEncodingForURI = false;
 
-
+    /** 是否拒绝可疑URI（增强安全性） */
     private boolean rejectSuspiciousURIs;
 
-
-    // ------------------------------------------------------------- Properties
-
+    // --------------------------- 属性访问方法 ---------------------------
     /**
-     * Return a property from the protocol handler.
-     *
-     * @param name the property name
-     *
-     * @return the property value
+     * 从协议处理器获取属性值
+     * @param name 属性名
+     * @return 属性值，不存在时返回null
      */
     public Object getProperty(String name) {
-        if (protocolHandler == null) {
-            return null;
-        }
-        return IntrospectionUtils.getProperty(protocolHandler, name);
+        if (protocolHandler == null) return null;
+        return IntrospectionUtils.getProperty(protocolHandler, name); // 通过反射获取属性
     }
 
-
     /**
-     * Set a property on the protocol handler.
-     *
-     * @param name  the property name
-     * @param value the property value
-     *
-     * @return <code>true</code> if the property was successfully set
+     * 设置协议处理器的属性
+     * @param name 属性名
+     * @param value 属性值（字符串形式）
+     * @return 是否设置成功
      */
     public boolean setProperty(String name, String value) {
-        if (protocolHandler == null) {
-            return false;
-        }
-        return IntrospectionUtils.setProperty(protocolHandler, name, value);
+        if (protocolHandler == null) return false;
+        return IntrospectionUtils.setProperty(protocolHandler, name, value); // 通过反射设置属性
     }
 
+    // 以下是各实例变量的getter和setter方法，注释从简
+    public Service getService() { return this.service; }
+    public void setService(Service service) { this.service = service; }
 
-    /**
-     * @return the <code>Service</code> with which we are associated (if any).
-     */
-    public Service getService() {
-        return this.service;
-    }
+    public boolean getAllowBackslash() { return allowBackslash; }
+    public void setAllowBackslash(boolean allowBackslash) { this.allowBackslash = allowBackslash; }
 
+    public boolean getAllowTrace() { return this.allowTrace; }
+    public void setAllowTrace(boolean allowTrace) { this.allowTrace = allowTrace; }
 
-    /**
-     * Set the <code>Service</code> with which we are associated (if any).
-     *
-     * @param service The service that owns this Engine
-     */
-    public void setService(Service service) {
-        this.service = service;
-    }
+    public long getAsyncTimeout() { return asyncTimeout; }
+    public void setAsyncTimeout(long asyncTimeout) { this.asyncTimeout = asyncTimeout; }
 
-
-    /**
-     * @return <code>true</code> if backslash characters are allowed in URLs. Default value is <code>false</code>.
-     */
-    public boolean getAllowBackslash() {
-        return allowBackslash;
-    }
-
-
-    /**
-     * Set the allowBackslash flag.
-     *
-     * @param allowBackslash the new flag value
-     */
-    public void setAllowBackslash(boolean allowBackslash) {
-        this.allowBackslash = allowBackslash;
-    }
-
-
-    /**
-     * @return <code>true</code> if the TRACE method is allowed. Default value is <code>false</code>.
-     */
-    public boolean getAllowTrace() {
-        return this.allowTrace;
-    }
-
-
-    /**
-     * Set the allowTrace flag, to disable or enable the TRACE HTTP method.
-     *
-     * @param allowTrace The new allowTrace flag
-     */
-    public void setAllowTrace(boolean allowTrace) {
-        this.allowTrace = allowTrace;
-    }
-
-
-    /**
-     * @return the default timeout for async requests in ms.
-     */
-    public long getAsyncTimeout() {
-        return asyncTimeout;
-    }
-
-
-    /**
-     * Set the default timeout for async requests.
-     *
-     * @param asyncTimeout The new timeout in ms.
-     */
-    public void setAsyncTimeout(long asyncTimeout) {
-        this.asyncTimeout = asyncTimeout;
-    }
-
-
-    /**
-     * @return <code>true</code> if the object facades are discarded, either when the discardFacades value is
-     *             <code>true</code> or when the security manager is enabled.
-     */
     public boolean getDiscardFacades() {
+        // 安全管理器启用时强制回收门面对象
         return discardFacades || Globals.IS_SECURITY_ENABLED;
     }
+    public void setDiscardFacades(boolean discardFacades) { this.discardFacades = discardFacades; }
 
+    public boolean getEnableLookups() { return this.enableLookups; }
+    public void setEnableLookups(boolean enableLookups) { this.enableLookups = enableLookups; }
 
-    /**
-     * Set the recycling strategy for the object facades.
-     *
-     * @param discardFacades the new value of the flag
-     */
-    public void setDiscardFacades(boolean discardFacades) {
-        this.discardFacades = discardFacades;
-    }
-
-
-    /**
-     * @return the "enable DNS lookups" flag.
-     */
-    public boolean getEnableLookups() {
-        return this.enableLookups;
-    }
-
-
-    /**
-     * Set the "enable DNS lookups" flag.
-     *
-     * @param enableLookups The new "enable DNS lookups" flag value
-     */
-    public void setEnableLookups(boolean enableLookups) {
-        this.enableLookups = enableLookups;
-    }
-
-
-    /**
-     * @return <code>true</code> if a default character encoding will be set when calling Response.getWriter()
-     */
-    public boolean getEnforceEncodingInGetWriter() {
-        return enforceEncodingInGetWriter;
-    }
-
-
-    /**
-     * Set the enforceEncodingInGetWriter flag.
-     *
-     * @param enforceEncodingInGetWriter the new flag value
-     */
+    public boolean getEnforceEncodingInGetWriter() { return enforceEncodingInGetWriter; }
     public void setEnforceEncodingInGetWriter(boolean enforceEncodingInGetWriter) {
         this.enforceEncodingInGetWriter = enforceEncodingInGetWriter;
     }
 
+    // 省略部分getter/setter注释（逻辑类似）
+    public int getMaxCookieCount() { return maxCookieCount; }
+    public void setMaxCookieCount(int maxCookieCount) { this.maxCookieCount = maxCookieCount; }
 
-    public int getMaxCookieCount() {
-        return maxCookieCount;
-    }
+    public int getMaxParameterCount() { return maxParameterCount; }
+    public void setMaxParameterCount(int maxParameterCount) { this.maxParameterCount = maxParameterCount; }
 
+    public int getMaxPartCount() { return maxPartCount; }
+    public void setMaxPartCount(int maxPartCount) { this.maxPartCount = maxPartCount; }
 
-    public void setMaxCookieCount(int maxCookieCount) {
-        this.maxCookieCount = maxCookieCount;
-    }
+    public int getMaxPartHeaderSize() { return maxPartHeaderSize; }
+    public void setMaxPartHeaderSize(int maxPartHeaderSize) { this.maxPartHeaderSize = maxPartHeaderSize; }
 
+    public int getMaxPostSize() { return maxPostSize; }
+    public void setMaxPostSize(int maxPostSize) { this.maxPostSize = maxPostSize; }
 
-    /**
-     * @return the maximum number of parameters (GET plus POST) that will be automatically parsed by the container. A
-     *             value of less than 0 means no limit.
-     */
-    public int getMaxParameterCount() {
-        return maxParameterCount;
-    }
-
-
-    /**
-     * Set the maximum number of parameters (GET plus POST) that will be automatically parsed by the container. A value
-     * of less than 0 means no limit.
-     *
-     * @param maxParameterCount The new setting
-     */
-    public void setMaxParameterCount(int maxParameterCount) {
-        this.maxParameterCount = maxParameterCount;
-    }
-
-
-    public int getMaxPartCount() {
-        return maxPartCount;
-    }
-
-
-    public void setMaxPartCount(int maxPartCount) {
-        this.maxPartCount = maxPartCount;
-    }
-
-
-    public int getMaxPartHeaderSize() {
-        return maxPartHeaderSize;
-    }
-
-
-    public void setMaxPartHeaderSize(int maxPartHeaderSize) {
-        this.maxPartHeaderSize = maxPartHeaderSize;
-    }
-
-
-    /**
-     * @return the maximum size of a POST which will be automatically parsed by the container.
-     */
-    public int getMaxPostSize() {
-        return maxPostSize;
-    }
-
-
-    /**
-     * Set the maximum size of a POST which will be automatically parsed by the container.
-     *
-     * @param maxPostSize The new maximum size in bytes of a POST which will be automatically parsed by the container
-     */
-    public void setMaxPostSize(int maxPostSize) {
-        this.maxPostSize = maxPostSize;
-    }
-
-
-    /**
-     * @return the maximum size of a POST which will be saved by the container during authentication.
-     */
-    public int getMaxSavePostSize() {
-        return maxSavePostSize;
-    }
-
-
-    /**
-     * Set the maximum size of a POST which will be saved by the container during authentication.
-     *
-     * @param maxSavePostSize The new maximum size in bytes of a POST which will be saved by the container during
-     *                            authentication.
-     */
+    public int getMaxSavePostSize() { return maxSavePostSize; }
     public void setMaxSavePostSize(int maxSavePostSize) {
         this.maxSavePostSize = maxSavePostSize;
         setProperty("maxSavePostSize", String.valueOf(maxSavePostSize));
     }
 
-
-    /**
-     * @return the HTTP methods which will support body parameters parsing
-     */
-    public String getParseBodyMethods() {
-        return this.parseBodyMethods;
-    }
-
-
-    /**
-     * Set list of HTTP methods which should allow body parameter parsing. This defaults to <code>POST</code>.
-     *
-     * @param methods Comma separated list of HTTP method names
-     */
+    public String getParseBodyMethods() { return this.parseBodyMethods; }
     public void setParseBodyMethods(String methods) {
-
+        // 解析方法列表并验证（不允许包含TRACE方法）
         HashSet<String> methodSet = new HashSet<>();
-
-        if (null != methods) {
+        if (methods != null) {
             methodSet.addAll(Arrays.asList(StringUtils.splitCommaSeparated(methods)));
         }
-
         if (methodSet.contains("TRACE")) {
             throw new IllegalArgumentException(sm.getString("coyoteConnector.parseBodyMethodNoTrace"));
         }
-
         this.parseBodyMethods = methods;
         this.parseBodyMethodsSet = methodSet;
     }
 
-
+    /** 判断指定方法是否需要解析请求体 */
     protected boolean isParseBodyMethod(String method) {
         return parseBodyMethodsSet.contains(method);
     }
 
-
-    /**
-     * @return the port number on which this connector is configured to listen for requests. The special value of 0
-     *             means select a random free port when the socket is bound.
-     */
+    /** 获取连接器监听的端口（考虑端口偏移） */
     public int getPort() {
-        // Try shortcut that should work for nearly all uses first as it does
-        // not use reflection and is therefore faster.
+        // 优先使用AbstractProtocol的快捷方式（性能优化）
         if (protocolHandler instanceof AbstractProtocol<?>) {
             return ((AbstractProtocol<?>) protocolHandler).getPort();
         }
-        // Fall back for custom protocol handlers not based on AbstractProtocol
+        // 反射获取属性（适用于自定义协议处理器）
         Object port = getProperty("port");
         if (port instanceof Integer) {
             return ((Integer) port).intValue();
         }
-        // Usually means an invalid protocol has been configured
-        return -1;
+        return -1; // 无效配置
     }
 
+    public void setPort(int port) { setProperty("port", String.valueOf(port)); }
 
-    /**
-     * Set the port number on which we listen for requests.
-     *
-     * @param port The new port number
-     */
-    public void setPort(int port) {
-        setProperty("port", String.valueOf(port));
-    }
-
-
+    // 省略部分方法注释（逻辑类似端口获取）
     public int getPortOffset() {
-        // Try shortcut that should work for nearly all uses first as it does
-        // not use reflection and is therefore faster.
         if (protocolHandler instanceof AbstractProtocol<?>) {
             return ((AbstractProtocol<?>) protocolHandler).getPortOffset();
         }
-        // Fall back for custom protocol handlers not based on AbstractProtocol
         Object port = getProperty("portOffset");
         if (port instanceof Integer) {
             return ((Integer) port).intValue();
         }
-        // Usually means an invalid protocol has been configured.
         return 0;
     }
 
-
-    public void setPortOffset(int portOffset) {
-        setProperty("portOffset", String.valueOf(portOffset));
-    }
-
+    public void setPortOffset(int portOffset) { setProperty("portOffset", String.valueOf(portOffset)); }
 
     public int getPortWithOffset() {
         int port = getPort();
-        // Zero is a special case and negative values are invalid
-        if (port > 0) {
-            return port + getPortOffset();
-        }
-        return port;
+        return port > 0 ? port + getPortOffset() : port; // 计算实际端口
     }
 
-
-    /**
-     * @return the port number on which this connector is listening to requests. If the special value for
-     *             {@link #getPort} of zero is used then this method will report the actual port bound.
-     */
     public int getLocalPort() {
-        return ((Integer) getProperty("localPort")).intValue();
+        return ((Integer) getProperty("localPort")).intValue(); // 获取实际绑定的端口
     }
 
+    public String getProtocol() { return configuredProtocol; }
+    public String getProtocolHandlerClassName() { return this.protocolHandlerClassName; }
+    public ProtocolHandler getProtocolHandler() { return this.protocolHandler; }
 
-    /**
-     * @return the Coyote protocol handler in use.
-     */
-    public String getProtocol() {
-        return configuredProtocol;
-    }
-
-
-    /**
-     * @return the class name of the Coyote protocol handler in use.
-     */
-    public String getProtocolHandlerClassName() {
-        return this.protocolHandlerClassName;
-    }
-
-
-    /**
-     * @return the protocol handler associated with the connector.
-     */
-    public ProtocolHandler getProtocolHandler() {
-        return this.protocolHandler;
-    }
-
-
-    /**
-     * @return the proxy server name for this Connector.
-     */
-    public String getProxyName() {
-        return this.proxyName;
-    }
-
-
-    /**
-     * Set the proxy server name for this Connector.
-     *
-     * @param proxyName The new proxy server name
-     */
+    public String getProxyName() { return this.proxyName; }
     public void setProxyName(String proxyName) {
-
-        if (proxyName != null && !proxyName.isEmpty()) {
-            this.proxyName = proxyName;
-        } else {
-            this.proxyName = null;
-        }
+        this.proxyName = proxyName != null && !proxyName.isEmpty() ? proxyName : null;
     }
 
+    public int getProxyPort() { return this.proxyPort; }
+    public void setProxyPort(int proxyPort) { this.proxyPort = proxyPort; }
 
-    /**
-     * @return the proxy server port for this Connector.
-     */
-    public int getProxyPort() {
-        return this.proxyPort;
-    }
+    public int getRedirectPort() { return this.redirectPort; }
+    public void setRedirectPort(int redirectPort) { this.redirectPort = redirectPort; }
 
+    public int getRedirectPortWithOffset() { return getRedirectPort() + getPortOffset(); }
 
-    /**
-     * Set the proxy server port for this Connector.
-     *
-     * @param proxyPort The new proxy server port
-     */
-    public void setProxyPort(int proxyPort) {
-        this.proxyPort = proxyPort;
-    }
+    public String getScheme() { return this.scheme; }
+    public void setScheme(String scheme) { this.scheme = scheme; }
 
-
-    /**
-     * @return the port number to which a request should be redirected if it comes in on a non-SSL port and is subject
-     *             to a security constraint with a transport guarantee that requires SSL.
-     */
-    public int getRedirectPort() {
-        return this.redirectPort;
-    }
-
-
-    /**
-     * Set the redirect port number.
-     *
-     * @param redirectPort The redirect port number (non-SSL to SSL)
-     */
-    public void setRedirectPort(int redirectPort) {
-        this.redirectPort = redirectPort;
-    }
-
-
-    public int getRedirectPortWithOffset() {
-        return getRedirectPort() + getPortOffset();
-    }
-
-
-    /**
-     * @return the scheme that will be assigned to requests received through this connector. Default value is "http".
-     */
-    public String getScheme() {
-        return this.scheme;
-    }
-
-
-    /**
-     * Set the scheme that will be assigned to requests received through this connector.
-     *
-     * @param scheme The new scheme
-     */
-    public void setScheme(String scheme) {
-        this.scheme = scheme;
-    }
-
-
-    /**
-     * @return the secure connection flag that will be assigned to requests received through this connector. Default
-     *             value is "false".
-     */
-    public boolean getSecure() {
-        return this.secure;
-    }
-
-
-    /**
-     * Set the secure connection flag that will be assigned to requests received through this connector.
-     *
-     * @param secure The new secure connection flag
-     */
+    public boolean getSecure() { return this.secure; }
     public void setSecure(boolean secure) {
         this.secure = secure;
         setProperty("secure", Boolean.toString(secure));
     }
 
+    /** 获取URI编码的字符集名称（原始大小写） */
+    public String getURIEncoding() { return uriCharset.name(); }
 
-    /**
-     * @return the name of character encoding to be used for the URI using the original case.
-     */
-    public String getURIEncoding() {
-        return uriCharset.name();
-    }
+    /** 获取URI编码的Charset实例（非null） */
+    public Charset getURICharset() { return uriCharset; }
 
-
-    /**
-     * @return The Charset to use to convert raw URI bytes (after %nn decoding) to characters. This will never be null
-     */
-    public Charset getURICharset() {
-        return uriCharset;
-    }
-
-    /**
-     * Set the URI encoding to be used for the URI.
-     *
-     * @param URIEncoding The new URI character encoding.
-     */
+    /** 设置URI编码，验证是否为ASCII超集（避免编码问题） */
     public void setURIEncoding(String URIEncoding) {
         try {
             Charset charset = B2CConverter.getCharset(URIEncoding);
@@ -809,67 +363,18 @@ public class Connector extends LifecycleMBeanBase {
         }
     }
 
-
-    /**
-     * @return the true if the entity body encoding should be used for the URI.
-     */
-    public boolean getUseBodyEncodingForURI() {
-        return this.useBodyEncodingForURI;
-    }
-
-
-    /**
-     * Set if the entity body encoding should be used for the URI.
-     *
-     * @param useBodyEncodingForURI The new value for the flag.
-     */
+    public boolean getUseBodyEncodingForURI() { return this.useBodyEncodingForURI; }
     public void setUseBodyEncodingForURI(boolean useBodyEncodingForURI) {
         this.useBodyEncodingForURI = useBodyEncodingForURI;
     }
 
-    /**
-     * Indicates whether the generation of an X-Powered-By response header for Servlet-generated responses is enabled or
-     * disabled for this Connector.
-     *
-     * @return <code>true</code> if generation of X-Powered-By response header is enabled, false otherwise
-     */
-    public boolean getXpoweredBy() {
-        return xpoweredBy;
-    }
+    public boolean getXpoweredBy() { return xpoweredBy; }
+    public void setXpoweredBy(boolean xpoweredBy) { this.xpoweredBy = xpoweredBy; }
 
+    public void setUseIPVHosts(boolean useIPVHosts) { this.useIPVHosts = useIPVHosts; }
+    public boolean getUseIPVHosts() { return useIPVHosts; }
 
-    /**
-     * Enables or disables the generation of an X-Powered-By header (with value Servlet/2.5) for all servlet-generated
-     * responses returned by this Connector.
-     *
-     * @param xpoweredBy true if generation of X-Powered-By response header is to be enabled, false otherwise
-     */
-    public void setXpoweredBy(boolean xpoweredBy) {
-        this.xpoweredBy = xpoweredBy;
-    }
-
-
-    /**
-     * Enable the use of IP-based virtual hosting.
-     *
-     * @param useIPVHosts <code>true</code> if Hosts are identified by IP, <code>false</code> if Hosts are identified by
-     *                        name.
-     */
-    public void setUseIPVHosts(boolean useIPVHosts) {
-        this.useIPVHosts = useIPVHosts;
-    }
-
-
-    /**
-     * Test if IP-based virtual hosting is enabled.
-     *
-     * @return <code>true</code> if IP vhosts are enabled
-     */
-    public boolean getUseIPVHosts() {
-        return useIPVHosts;
-    }
-
-
+    /** 获取当前使用的执行器名称（内部或自定义） */
     public String getExecutorName() {
         Object obj = protocolHandler.getExecutor();
         if (obj instanceof org.apache.catalina.Executor) {
@@ -878,197 +383,152 @@ public class Connector extends LifecycleMBeanBase {
         return INTERNAL_EXECUTOR_NAME;
     }
 
-
+    // SSL和升级协议相关方法
     public void addSslHostConfig(SSLHostConfig sslHostConfig) {
         protocolHandler.addSslHostConfig(sslHostConfig);
     }
-
 
     public SSLHostConfig[] findSslHostConfigs() {
         return protocolHandler.findSslHostConfigs();
     }
 
-
     public void addUpgradeProtocol(UpgradeProtocol upgradeProtocol) {
         protocolHandler.addUpgradeProtocol(upgradeProtocol);
     }
-
 
     public UpgradeProtocol[] findUpgradeProtocols() {
         return protocolHandler.findUpgradeProtocols();
     }
 
-
+    // 编码处理策略相关方法
     public String getEncodedReverseSolidusHandling() {
         return encodedReverseSolidusHandling.getValue();
     }
-
 
     public void setEncodedReverseSolidusHandling(String encodedReverseSolidusHandling) {
         this.encodedReverseSolidusHandling = EncodedSolidusHandling.fromString(encodedReverseSolidusHandling);
     }
 
-
     public EncodedSolidusHandling getEncodedReverseSolidusHandlingInternal() {
         return encodedReverseSolidusHandling;
     }
-
 
     public String getEncodedSolidusHandling() {
         return encodedSolidusHandling.getValue();
     }
 
-
     public void setEncodedSolidusHandling(String encodedSolidusHandling) {
         this.encodedSolidusHandling = EncodedSolidusHandling.fromString(encodedSolidusHandling);
     }
-
 
     public EncodedSolidusHandling getEncodedSolidusHandlingInternal() {
         return encodedSolidusHandling;
     }
 
-
-    public boolean getRejectSuspiciousURIs() {
-        return rejectSuspiciousURIs;
-    }
-
-
+    public boolean getRejectSuspiciousURIs() { return rejectSuspiciousURIs; }
     public void setRejectSuspiciousURIs(boolean rejectSuspiciousURIs) {
         this.rejectSuspiciousURIs = rejectSuspiciousURIs;
     }
 
-
-    // --------------------------------------------------------- Public Methods
-
-    /**
-     * Create (or allocate) and return a Request object suitable for specifying the contents of a Request to the
-     * responsible Container.
-     *
-     * @return a new Servlet request object
-     */
+    // --------------------------- 公共方法 ---------------------------
+    /** 创建适合容器处理的Request对象 */
     public Request createRequest() {
-        return new Request(this);
+        return new Request(this); // 传入当前Connector作为上下文
     }
 
-
-    /**
-     * Create (or allocate) and return a Response object suitable for receiving the contents of a Response from the
-     * responsible Container.
-     *
-     * @return a new Servlet response object
-     */
+    /** 创建适合容器处理的Response对象（支持缓冲区大小配置） */
     public Response createResponse() {
         int size = protocolHandler.getDesiredBufferSize();
-        if (size > 0) {
-            return new Response(size);
-        } else {
-            return new Response();
-        }
+        return size > 0 ? new Response(size) : new Response();
     }
 
-
+    /** 创建MBean对象名的键值属性（用于JMX注册） */
     protected String createObjectNameKeyProperties(String type) {
-
         Object addressObj = getProperty("address");
-
         StringBuilder sb = new StringBuilder("type=");
         sb.append(type);
         String id = (protocolHandler != null) ? protocolHandler.getId() : null;
         if (id != null) {
-            // Maintain MBean name compatibility, even if not accurate
-            sb.append(",port=0,address=");
-            sb.append(ObjectName.quote(id));
+            // 兼容旧版MBean命名规则
+            sb.append(",port=0,address=").append(ObjectName.quote(id));
         } else {
             sb.append(",port=");
             int port = getPortWithOffset();
             if (port > 0) {
                 sb.append(port);
             } else {
-                sb.append("auto-");
-                sb.append(getProperty("nameIndex"));
+                sb.append("auto-").append(getProperty("nameIndex"));
             }
-            String address = "";
-            if (addressObj instanceof InetAddress) {
-                address = ((InetAddress) addressObj).getHostAddress();
-            } else if (addressObj != null) {
-                address = addressObj.toString();
-            }
+            String address = addressObj instanceof InetAddress
+                ? ((InetAddress) addressObj).getHostAddress()
+                : (addressObj != null ? addressObj.toString() : "");
             if (!address.isEmpty()) {
-                sb.append(",address=");
-                sb.append(ObjectName.quote(address));
+                sb.append(",address=").append(ObjectName.quote(address));
             }
         }
         return sb.toString();
     }
 
-
-    /**
-     * Pause the connector.
-     */
+    /** 暂停连接器（暂停接收新请求） */
     public void pause() {
         try {
             if (protocolHandler != null) {
-                protocolHandler.pause();
+                protocolHandler.pause(); // 调用协议处理器的暂停方法
             }
         } catch (Exception e) {
             log.error(sm.getString("coyoteConnector.protocolHandlerPauseFailed"), e);
         }
     }
 
-
-    /**
-     * Resume the connector.
-     */
+    /** 恢复连接器（重新接收请求） */
     public void resume() {
         try {
             if (protocolHandler != null) {
-                protocolHandler.resume();
+                protocolHandler.resume(); // 调用协议处理器的恢复方法
             }
         } catch (Exception e) {
             log.error(sm.getString("coyoteConnector.protocolHandlerResumeFailed"), e);
         }
     }
 
-
+    // --------------------------- 生命周期方法 ---------------------------
+    /** 初始化连接器内部资源 */
     @Override
     protected void initInternal() throws LifecycleException {
-
-        super.initInternal();
+        super.initInternal(); // 调用父类初始化方法
 
         if (protocolHandler == null) {
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerInstantiationFailed"));
         }
 
-        // Initialize adapter
+        // 初始化适配器：连接协议处理器和容器
         adapter = new CoyoteAdapter(this);
         protocolHandler.setAdapter(adapter);
 
-        // Make sure parseBodyMethodsSet has a default
-        if (null == parseBodyMethodsSet) {
+        // 确保parseBodyMethodsSet有默认值
+        if (parseBodyMethodsSet == null) {
             setParseBodyMethods(getParseBodyMethods());
         }
 
+        // 自动检测并配置OpenSSL或APR（若可用）
         if (JreCompat.isJre22Available() && OpenSSLStatus.getUseOpenSSL() && OpenSSLStatus.isAvailable() &&
-                protocolHandler instanceof AbstractHttp11Protocol) {
-            // Use FFM and OpenSSL if available
+            protocolHandler instanceof AbstractHttp11Protocol) {
             AbstractHttp11JsseProtocol<?> jsseProtocolHandler = (AbstractHttp11JsseProtocol<?>) protocolHandler;
             if (jsseProtocolHandler.isSSLEnabled() && jsseProtocolHandler.getSslImplementationName() == null) {
-                // OpenSSL is compatible with the JSSE configuration, so use it if it is available
-                jsseProtocolHandler
-                        .setSslImplementationName("org.apache.tomcat.util.net.openssl.panama.OpenSSLImplementation");
+                // 使用Panama OpenSSL实现（JDK 22+）
+                jsseProtocolHandler.setSslImplementationName(
+                    "org.apache.tomcat.util.net.openssl.panama.OpenSSLImplementation");
             }
         } else if (AprStatus.isAprAvailable() && AprStatus.getUseOpenSSL() &&
-                protocolHandler instanceof AbstractHttp11Protocol) {
-            // Use tomcat-native and OpenSSL otherwise, if available
+            protocolHandler instanceof AbstractHttp11Protocol) {
             AbstractHttp11JsseProtocol<?> jsseProtocolHandler = (AbstractHttp11JsseProtocol<?>) protocolHandler;
             if (jsseProtocolHandler.isSSLEnabled() && jsseProtocolHandler.getSslImplementationName() == null) {
-                // OpenSSL is compatible with the JSSE configuration, so use it if APR is available
+                // 使用tomcat-native的OpenSSL实现
                 jsseProtocolHandler.setSslImplementationName(OpenSSLImplementation.class.getName());
             }
         }
-        // Otherwise the default JSSE will be used
 
+        // 初始化协议处理器
         try {
             protocolHandler.init();
         } catch (Exception e) {
@@ -1076,89 +536,75 @@ public class Connector extends LifecycleMBeanBase {
         }
     }
 
-
-    /**
-     * Begin processing requests via this Connector.
-     *
-     * @exception LifecycleException if a fatal startup error occurs
-     */
+    /** 启动连接器（开始接收请求） */
     @Override
     protected void startInternal() throws LifecycleException {
-
-        // Validate settings before starting
+        // 验证配置（端口不可为负）
         String id = (protocolHandler != null) ? protocolHandler.getId() : null;
         if (id == null && getPortWithOffset() < 0) {
-            throw new LifecycleException(
-                    sm.getString("coyoteConnector.invalidPort", Integer.valueOf(getPortWithOffset())));
+            throw new LifecycleException(sm.getString("coyoteConnector.invalidPort", getPortWithOffset()));
         }
 
-        setState(LifecycleState.STARTING);
+        setState(LifecycleState.STARTING); // 更新生命周期状态
 
-        // Configure the utility executor before starting the protocol handler
+        // 配置工具执行器（用于异步任务）
         if (protocolHandler != null && service != null) {
             protocolHandler.setUtilityExecutor(service.getServer().getUtilityExecutor());
         }
 
+        // 启动协议处理器
         try {
             protocolHandler.start();
         } catch (Exception e) {
-            // Includes NPE - protocolHandler will be null for invalid protocol if throwOnFailure is false
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerStartFailed"), e);
         }
     }
 
-
-    /**
-     * Terminate processing requests via this Connector.
-     *
-     * @exception LifecycleException if a fatal shutdown error occurs
-     */
+    /** 停止连接器（停止接收请求） */
     @Override
     protected void stopInternal() throws LifecycleException {
-
-        setState(LifecycleState.STOPPING);
+        setState(LifecycleState.STOPPING); // 更新生命周期状态
 
         try {
             if (protocolHandler != null) {
-                protocolHandler.stop();
+                protocolHandler.stop(); // 停止协议处理器
             }
         } catch (Exception e) {
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerStopFailed"), e);
         }
 
-        // Remove the utility executor once the protocol handler has been stopped
+        // 停止后移除工具执行器（释放资源）
         if (protocolHandler != null) {
             protocolHandler.setUtilityExecutor(null);
         }
     }
 
-
+    /** 销毁连接器（释放所有资源） */
     @Override
     protected void destroyInternal() throws LifecycleException {
         try {
             if (protocolHandler != null) {
-                protocolHandler.destroy();
+                protocolHandler.destroy(); // 销毁协议处理器
             }
         } catch (Exception e) {
             throw new LifecycleException(sm.getString("coyoteConnector.protocolHandlerDestroyFailed"), e);
         }
 
+        // 从Service中移除自身引用
         if (getService() != null) {
             getService().removeConnector(this);
         }
 
-        super.destroyInternal();
+        super.destroyInternal(); // 调用父类销毁方法
     }
 
-
+    /** 重写toString方法，返回连接器的描述信息 */
     @Override
     public String toString() {
-        // Not worth caching this right now
         StringBuilder sb = new StringBuilder("Connector[");
         String name = (String) getProperty("name");
         if (name == null) {
-            sb.append(getProtocol());
-            sb.append('-');
+            sb.append(getProtocol()).append('-');
             String id = (protocolHandler != null) ? protocolHandler.getId() : null;
             if (id != null) {
                 sb.append(id);
@@ -1167,8 +613,7 @@ public class Connector extends LifecycleMBeanBase {
                 if (port > 0) {
                     sb.append(port);
                 } else {
-                    sb.append("auto-");
-                    sb.append(getProperty("nameIndex"));
+                    sb.append("auto-").append(getProperty("nameIndex"));
                 }
             }
         } else {
@@ -1178,22 +623,17 @@ public class Connector extends LifecycleMBeanBase {
         return sb.toString();
     }
 
-
-    // -------------------- JMX registration --------------------
-
+    // --------------------------- JMX相关方法 ---------------------------
+    /** 获取MBean的域名（继承自Service） */
     @Override
     protected String getDomainInternal() {
         Service s = getService();
-        if (s == null) {
-            return null;
-        } else {
-            return service.getDomain();
-        }
+        return s != null ? service.getDomain() : null;
     }
 
+    /** 获取MBean对象名的键值属性（调用自定义方法） */
     @Override
     protected String getObjectNameKeyProperties() {
         return createObjectNameKeyProperties("Connector");
     }
-
 }

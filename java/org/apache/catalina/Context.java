@@ -1,18 +1,9 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权所有 (C) Apache Software Foundation. 保留所有权利
+ * 有关版权所有权的额外信息，请参阅随附的NOTICE文件
+ * Apache 软件基金会根据 Apache 许可证 2.0 版（"许可证"）授权本文件
+ * 除非符合许可证，否则不得使用本文件
+ * 您可以在 http://www.apache.org/licenses/LICENSE-2.0 获得许可证副本
  */
 package org.apache.catalina;
 
@@ -25,12 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import jakarta.servlet.RequestDispatcher;
-import jakarta.servlet.ServletContainerInitializer;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.ServletRegistration;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletSecurityElement;
+import jakarta.servlet.*;
 import jakarta.servlet.descriptor.JspConfigDescriptor;
 
 import org.apache.catalina.deploy.NamingResourcesImpl;
@@ -49,836 +35,834 @@ import org.apache.tomcat.util.file.ConfigurationSource.Resource;
 import org.apache.tomcat.util.http.CookieProcessor;
 
 /**
- * A <b>Context</b> is a Container that represents a servlet context, and therefore an individual web application, in
- * the Catalina servlet engine. It is therefore useful in almost every deployment of Catalina (even if a Connector
- * attached to a web server such as Apache uses the web server's facilities to identify the appropriate Wrapper to
- * handle this request). It also provides a convenient mechanism to use Interceptors that see every request processed by
- * this particular web application.
+ * Context 接口表示 Catalina Servlet 引擎中的 Servlet 上下文（即单个 Web 应用程序）
+ * 它在几乎所有 Catalina 部署中都很有用（即使连接到 Apache 等 Web 服务器的 Connector
+ * 使用 Web 服务器的功能来识别处理请求的适当 Wrapper）
+ * 它还提供了一种方便的机制来使用拦截器处理此特定 Web 应用程序的每个请求
  * <p>
- * The parent Container attached to a Context is generally a Host, but may be some other implementation, or may be
- * omitted if it is not necessary.
+ * 附加到 Context 的父容器通常是 Host，但也可以是其他实现，或者在不需要时可以省略
  * <p>
- * The child containers attached to a Context are generally implementations of Wrapper (representing individual servlet
- * definitions).
- * <p>
+ * 附加到 Context 的子容器通常是 Wrapper 实现（表示单个 Servlet 定义）
  *
  * @author Craig R. McClanahan
  */
 public interface Context extends Container, ContextBind {
 
 
-    // ----------------------------------------------------- Manifest Constants
+    // ----------------------------------------------------- 常量定义
 
-    /**
-     * Container event for adding a welcome file.
-     */
+    /** 添加欢迎文件的容器事件 */
     String ADD_WELCOME_FILE_EVENT = "addWelcomeFile";
 
-    /**
-     * Container event for removing a wrapper.
-     */
+    /** 移除欢迎文件的容器事件 */
     String REMOVE_WELCOME_FILE_EVENT = "removeWelcomeFile";
 
-    /**
-     * Container event for clearing welcome files.
-     */
+    /** 清除欢迎文件的容器事件 */
     String CLEAR_WELCOME_FILES_EVENT = "clearWelcomeFiles";
 
-    /**
-     * Container event for changing the ID of a session.
-     */
+    /** 更改会话ID的容器事件 */
     String CHANGE_SESSION_ID_EVENT = "changeSessionId";
 
 
-    /**
-     * Prefix for resource lookup.
-     */
+    /** 资源查找的前缀 */
     String WEBAPP_PROTOCOL = "webapp:";
 
 
-    // ------------------------------------------------------------- Properties
+    // ------------------------------------------------------------- 属性访问方法
 
     /**
-     * Returns <code>true</code> if requests mapped to servlets without "multipart config" to parse multipart/form-data
-     * requests anyway.
+     * 获取是否允许为没有"multipart config"的Servlet解析multipart/form-data请求
      *
-     * @return <code>true</code> if requests mapped to servlets without "multipart config" to parse multipart/form-data
-     *             requests, <code>false</code> otherwise.
+     * @return true 如果允许，false 否则
      */
     boolean getAllowCasualMultipartParsing();
 
 
     /**
-     * Set to <code>true</code> to allow requests mapped to servlets that do not explicitly declare @MultipartConfig or
-     * have &lt;multipart-config&gt; specified in web.xml to parse multipart/form-data requests.
+     * 设置是否允许为没有"multipart config"的Servlet解析multipart/form-data请求
      *
-     * @param allowCasualMultipartParsing <code>true</code> to allow such casual parsing, <code>false</code> otherwise.
+     * @param allowCasualMultipartParsing 允许为true，否则为false
      */
     void setAllowCasualMultipartParsing(boolean allowCasualMultipartParsing);
 
 
     /**
-     * Obtain the registered application event listeners.
+     * 获取注册的应用程序事件监听器
      *
-     * @return An array containing the application event listener instances for this web application in the order they
-     *             were specified in the web application deployment descriptor
+     * @return 按Web应用部署描述符中指定顺序排列的应用程序事件监听器实例数组
      */
     Object[] getApplicationEventListeners();
 
 
     /**
-     * Store the set of initialized application event listener objects, in the order they were specified in the web
-     * application deployment descriptor, for this application.
+     * 设置应用程序事件监听器实例数组
+     * 按Web应用部署描述符中指定的顺序存储
      *
-     * @param listeners The set of instantiated listener objects.
+     * @param listeners 实例化的监听器对象集合
      */
     void setApplicationEventListeners(Object[] listeners);
 
 
     /**
-     * Obtain the registered application lifecycle listeners.
+     * 获取注册的应用程序生命周期监听器
      *
-     * @return An array containing the application lifecycle listener instances for this web application in the order
-     *             they were specified in the web application deployment descriptor
+     * @return 按Web应用部署描述符中指定顺序排列的应用程序生命周期监听器实例数组
      */
     Object[] getApplicationLifecycleListeners();
 
 
     /**
-     * Store the set of initialized application lifecycle listener objects, in the order they were specified in the web
-     * application deployment descriptor, for this application.
+     * 设置应用程序生命周期监听器实例数组
+     * 按Web应用部署描述符中指定的顺序存储
      *
-     * @param listeners The set of instantiated listener objects.
+     * @param listeners 实例化的监听器对象集合
      */
     void setApplicationLifecycleListeners(Object[] listeners);
 
 
     /**
-     * Obtain the character set name to use with the given Locale. Note that different Contexts may have different
-     * mappings of Locale to character set.
+     * 获取与给定Locale关联的字符集名称
+     * 不同的Context可能有不同的Locale到字符集的映射
      *
-     * @param locale The locale for which the mapped character set should be returned
-     *
-     * @return The name of the character set to use with the given Locale
+     * @param locale 要获取字符集的Locale
+     * @return 与给定Locale关联的字符集名称
      */
     String getCharset(Locale locale);
 
 
     /**
-     * Return the URL of the XML descriptor for this context.
+     * 返回此Context的XML描述符的URL
      *
-     * @return The URL of the XML descriptor for this context
+     * @return Context的XML描述符的URL
      */
     URL getConfigFile();
 
 
     /**
-     * Set the URL of the XML descriptor for this context.
+     * 设置此Context的XML描述符的URL
      *
-     * @param configFile The URL of the XML descriptor for this context.
+     * @param configFile Context的XML描述符的URL
      */
     void setConfigFile(URL configFile);
 
 
     /**
-     * Return the "correctly configured" flag for this Context.
+     * 返回此Context的"正确配置"标志
      *
-     * @return <code>true</code> if the Context has been correctly configured, otherwise <code>false</code>
+     * @return 如果Context已正确配置为true，否则为false
      */
     boolean getConfigured();
 
 
     /**
-     * Set the "correctly configured" flag for this Context. This can be set to false by startup listeners that detect a
-     * fatal configuration error to avoid the application from being made available.
+     * 设置此Context的"正确配置"标志
+     * 启动监听器检测到致命配置错误时可设置为false，避免应用可用
      *
-     * @param configured The new correctly configured flag
+     * @param configured 新的正确配置标志
      */
     void setConfigured(boolean configured);
 
 
     /**
-     * Return the "use cookies for session ids" flag.
+     * 返回"使用Cookie存储会话ID"标志
      *
-     * @return <code>true</code> if it is permitted to use cookies to track session IDs for this web application,
-     *             otherwise <code>false</code>
+     * @return 如果允许使用Cookie跟踪此Web应用的会话ID为true，否则为false
      */
     boolean getCookies();
 
 
     /**
-     * Set the "use cookies for session ids" flag.
+     * 设置"使用Cookie存储会话ID"标志
      *
-     * @param cookies The new flag
+     * @param cookies 新标志
      */
     void setCookies(boolean cookies);
 
 
     /**
-     * Gets the name to use for session cookies. Overrides any setting that may be specified by the application.
+     * 获取会话Cookie使用的名称，覆盖应用程序指定的任何设置
      *
-     * @return The value of the default session cookie name or null if not specified
+     * @return 默认会话Cookie名称，未指定时返回null
      */
     String getSessionCookieName();
 
 
     /**
-     * Sets the name to use for session cookies. Overrides any setting that may be specified by the application.
+     * 设置会话Cookie使用的名称，覆盖应用程序指定的任何设置
      *
-     * @param sessionCookieName The name to use
+     * @param sessionCookieName 要使用的名称
      */
     void setSessionCookieName(String sessionCookieName);
 
 
     /**
-     * Gets the value of the use HttpOnly cookies for session cookies flag.
+     * 获取会话Cookie使用HttpOnly标志的标志值
      *
-     * @return <code>true</code> if the HttpOnly flag should be set on session cookies
+     * @return 如果会话Cookie应设置HttpOnly标志为true
      */
     boolean getUseHttpOnly();
 
 
     /**
-     * Sets the use HttpOnly cookies for session cookies flag.
+     * 设置会话Cookie使用HttpOnly标志的标志
      *
-     * @param useHttpOnly Set to <code>true</code> to use HttpOnly cookies for session cookies
+     * @param useHttpOnly 设置为true以对会话Cookie使用HttpOnly标志
      */
     void setUseHttpOnly(boolean useHttpOnly);
 
 
     /**
-     * Should the {@code Partitioned} attribute be added to session cookies created for this web application.
-     * <p>
-     * The name of the attribute used to indicate a partitioned cookie as part of
-     * <a href="https://developers.google.com/privacy-sandbox/3pcd#partitioned">CHIPS</a> is not defined by an RFC and
-     * may change in a non-backwards compatible way once equivalent functionality is included in an RFC.
+     * 是否应将Partitioned属性添加到此Web应用创建的会话Cookie中
      *
-     * @return {@code true} if the {@code Partitioned} attribute should be added to session cookies created for this web
-     *             application, otherwise {@code false}
+     * @return true 如果应添加Partitioned属性，否则false
      */
     boolean getUsePartitioned();
 
 
     /**
-     * Configure whether the {@code Partitioned} attribute should be added to session cookies created for this web
-     * application.
-     * <p>
-     * The name of the attribute used to indicate a partitioned cookie as part of
-     * <a href="https://developers.google.com/privacy-sandbox/3pcd#partitioned">CHIPS</a> is not defined by an RFC and
-     * may change in a non-backwards compatible way once equivalent functionality is included in an RFC.
+     * 配置是否应将Partitioned属性添加到此Web应用创建的会话Cookie中
      *
-     * @param usePartitioned {@code true} if the {@code Partitioned} attribute should be added to session cookies
-     *                           created for this web application, otherwise {@code false}
+     * @param usePartitioned true 表示应添加Partitioned属性
      */
     void setUsePartitioned(boolean usePartitioned);
 
 
     /**
-     * Gets the domain to use for session cookies. Overrides any setting that may be specified by the application.
+     * 获取会话Cookie使用的域，覆盖应用程序指定的任何设置
      *
-     * @return The value of the default session cookie domain or null if not specified
+     * @return 默认会话Cookie域，未指定时返回null
      */
     String getSessionCookieDomain();
 
 
     /**
-     * Sets the domain to use for session cookies. Overrides any setting that may be specified by the application.
+     * 设置会话Cookie使用的域，覆盖应用程序指定的任何设置
      *
-     * @param sessionCookieDomain The domain to use
+     * @param sessionCookieDomain 要使用的域
      */
     void setSessionCookieDomain(String sessionCookieDomain);
 
 
     /**
-     * Gets the path to use for session cookies. Overrides any setting that may be specified by the application.
+     * 获取会话Cookie使用的路径，覆盖应用程序指定的任何设置
      *
-     * @return The value of the default session cookie path or null if not specified
+     * @return 默认会话Cookie路径，未指定时返回null
      */
     String getSessionCookiePath();
 
 
     /**
-     * Sets the path to use for session cookies. Overrides any setting that may be specified by the application.
+     * 设置会话Cookie使用的路径，覆盖应用程序指定的任何设置
      *
-     * @param sessionCookiePath The path to use
+     * @param sessionCookiePath 要使用的路径
      */
     void setSessionCookiePath(String sessionCookiePath);
 
 
     /**
-     * Is a / added to the end of the session cookie path to ensure browsers, particularly IE, don't send a session
-     * cookie for context /foo with requests intended for context /foobar.
+     * 会话Cookie路径末尾是否添加/，确保浏览器（尤其是IE）
+     * 不会将/foo上下文的会话Cookie发送到/foobar上下文的请求
      *
-     * @return <code>true</code> if the slash is added, otherwise <code>false</code>
+     * @return true 如果添加斜杠，否则false
      */
     boolean getSessionCookiePathUsesTrailingSlash();
 
 
     /**
-     * Configures if a / is added to the end of the session cookie path to ensure browsers, particularly IE, don't send
-     * a session cookie for context /foo with requests intended for context /foobar.
+     * 配置会话Cookie路径末尾是否添加/，确保浏览器（尤其是IE）
+     * 不会将/foo上下文的会话Cookie发送到/foobar上下文的请求
      *
-     * @param sessionCookiePathUsesTrailingSlash <code>true</code> if the slash should be added, otherwise
-     *                                               <code>false</code>
+     * @param sessionCookiePathUsesTrailingSlash true 表示应添加斜杠
      */
     void setSessionCookiePathUsesTrailingSlash(boolean sessionCookiePathUsesTrailingSlash);
 
 
     /**
-     * Return the "allow crossing servlet contexts" flag.
+     * 返回"允许跨Servlet上下文"标志
      *
-     * @return <code>true</code> if cross-contest requests are allowed from this web applications, otherwise
-     *             <code>false</code>
+     * @return 如果此Web应用允许跨上下文请求为true，否则false
      */
     boolean getCrossContext();
 
 
     /**
-     * Return the alternate Deployment Descriptor name.
+     * 返回备用部署描述符名称
      *
-     * @return the name
+     * @return 名称
      */
     String getAltDDName();
 
 
     /**
-     * Set an alternate Deployment Descriptor name.
+     * 设置备用部署描述符名称
      *
-     * @param altDDName The new name
+     * @param altDDName 新名称
      */
     void setAltDDName(String altDDName);
 
 
     /**
-     * Set the "allow crossing servlet contexts" flag.
+     * 设置"允许跨Servlet上下文"标志
      *
-     * @param crossContext The new cross contexts flag
+     * @param crossContext 新的跨上下文标志
      */
     void setCrossContext(boolean crossContext);
 
 
     /**
-     * Return the deny-uncovered-http-methods flag for this web application.
+     * 返回此Web应用的deny-uncovered-http-methods标志
      *
-     * @return The current value of the flag
+     * @return 标志的当前值
      */
     boolean getDenyUncoveredHttpMethods();
 
 
     /**
-     * Set the deny-uncovered-http-methods flag for this web application.
+     * 设置此Web应用的deny-uncovered-http-methods标志
      *
-     * @param denyUncoveredHttpMethods The new deny-uncovered-http-methods flag
+     * @param denyUncoveredHttpMethods 新的deny-uncovered-http-methods标志
      */
     void setDenyUncoveredHttpMethods(boolean denyUncoveredHttpMethods);
 
 
     /**
-     * Return the display name of this web application.
+     * 返回此Web应用的显示名称
      *
-     * @return The display name
+     * @return 显示名称
      */
     String getDisplayName();
 
 
     /**
-     * Set the display name of this web application.
+     * 设置此Web应用的显示名称
      *
-     * @param displayName The new display name
+     * @param displayName 新的显示名称
      */
     void setDisplayName(String displayName);
 
 
     /**
-     * Get the distributable flag for this web application.
+     * 获取此Web应用的distributable标志
      *
-     * @return The value of the distributable flag for this web application.
+     * @return 此Web应用的distributable标志值
      */
     boolean getDistributable();
 
 
     /**
-     * Set the distributable flag for this web application.
+     * 设置此Web应用的distributable标志
      *
-     * @param distributable The new distributable flag
+     * @param distributable 新的distributable标志
      */
     void setDistributable(boolean distributable);
 
 
     /**
-     * Obtain the document root for this Context.
+     * 获取此Context的文档根目录
      *
-     * @return An absolute pathname or a relative (to the Host's appBase) pathname.
+     * @return 绝对路径名或相对于Host的appBase的路径名
      */
     String getDocBase();
 
 
     /**
-     * Set the document root for this Context. This can be either an absolute pathname or a relative pathname. Relative
-     * pathnames are relative to the containing Host's appBase.
+     * 设置此Context的文档根目录
+     * 可以是绝对路径名或相对路径名，相对路径相对于包含的Host的appBase
      *
-     * @param docBase The new document root
+     * @param docBase 新的文档根目录
      */
     void setDocBase(String docBase);
 
 
     /**
-     * Return the URL encoded context path
+     * 返回URL编码的上下文路径
      *
-     * @return The URL encoded (with UTF-8) context path
+     * @return 使用UTF-8编码的URL编码上下文路径
      */
     String getEncodedPath();
 
 
     /**
-     * Determine if annotations parsing is currently disabled
+     * 确定当前是否禁用注释解析
      *
-     * @return {@code true} if annotation parsing is disabled for this web application
+     * @return true 如果为此Web应用禁用了注释解析
      */
     boolean getIgnoreAnnotations();
 
 
     /**
-     * Set the boolean on the annotations parsing for this web application.
+     * 设置此Web应用的注释解析布尔值
      *
-     * @param ignoreAnnotations The boolean on the annotations parsing
+     * @param ignoreAnnotations 注释解析的布尔值
      */
     void setIgnoreAnnotations(boolean ignoreAnnotations);
 
 
     /**
-     * @return the login configuration descriptor for this web application.
+     * 返回此Web应用的登录配置描述符
+     *
+     * @return 登录配置描述符
      */
     LoginConfig getLoginConfig();
 
 
     /**
-     * Set the login configuration descriptor for this web application.
+     * 设置此Web应用的登录配置描述符
      *
-     * @param config The new login configuration
+     * @param config 新的登录配置
      */
     void setLoginConfig(LoginConfig config);
 
 
     /**
-     * @return the naming resources associated with this web application.
+     * 返回与此Web应用关联的命名资源
+     *
+     * @return 命名资源
      */
     NamingResourcesImpl getNamingResources();
 
 
     /**
-     * Set the naming resources for this web application.
+     * 设置此Web应用的命名资源
      *
-     * @param namingResources The new naming resources
+     * @param namingResources 新的命名资源
      */
     void setNamingResources(NamingResourcesImpl namingResources);
 
 
     /**
-     * @return the context path for this web application.
+     * 返回此Web应用的上下文路径
+     *
+     * @return 上下文路径
      */
     String getPath();
 
 
     /**
-     * Set the context path for this web application.
+     * 设置此Web应用的上下文路径
      *
-     * @param path The new context path
+     * @param path 新的上下文路径
      */
     void setPath(String path);
 
 
     /**
-     * @return the public identifier of the deployment descriptor DTD that is currently being parsed.
+     * 返回当前正在解析的部署描述符DTD的公共标识符
+     *
+     * @return 公共标识符
      */
     String getPublicId();
 
 
     /**
-     * Set the public identifier of the deployment descriptor DTD that is currently being parsed.
+     * 设置当前正在解析的部署描述符DTD的公共标识符
      *
-     * @param publicId The public identifier
+     * @param publicId 公共标识符
      */
     void setPublicId(String publicId);
 
 
     /**
-     * @return the reloadable flag for this web application.
+     * 返回此Web应用的reloadable标志
+     *
+     * @return reloadable标志值
      */
     boolean getReloadable();
 
 
     /**
-     * Set the reloadable flag for this web application.
+     * 设置此Web应用的reloadable标志
      *
-     * @param reloadable The new reloadable flag
+     * @param reloadable 新的reloadable标志
      */
     void setReloadable(boolean reloadable);
 
 
     /**
-     * @return the override flag for this web application.
+     * 返回此Web应用的override标志
+     *
+     * @return override标志值
      */
     boolean getOverride();
 
 
     /**
-     * Set the override flag for this web application.
+     * 设置此Web应用的override标志
      *
-     * @param override The new override flag
+     * @param override 新的override标志
      */
     void setOverride(boolean override);
 
 
     /**
-     * @return the privileged flag for this web application.
+     * 返回此Web应用的privileged标志
+     *
+     * @return privileged标志值
      */
     boolean getPrivileged();
 
 
     /**
-     * Set the privileged flag for this web application.
+     * 设置此Web应用的privileged标志
      *
-     * @param privileged The new privileged flag
+     * @param privileged 新的privileged标志
      */
     void setPrivileged(boolean privileged);
 
 
     /**
-     * @return the Servlet context for which this Context is a facade.
+     * 返回此Context作为外观的Servlet上下文
+     *
+     * @return Servlet上下文
      */
     ServletContext getServletContext();
 
 
     /**
-     * @return the default session timeout (in minutes) for this web application.
+     * 返回此Web应用的默认会话超时时间（分钟）
+     *
+     * @return 默认会话超时时间
      */
     int getSessionTimeout();
 
 
     /**
-     * Set the default session timeout (in minutes) for this web application.
+     * 设置此Web应用的默认会话超时时间（分钟）
      *
-     * @param timeout The new default session timeout
+     * @param timeout 新的默认会话超时时间
      */
     void setSessionTimeout(int timeout);
 
 
     /**
-     * Returns <code>true</code> if remaining request data will be read (swallowed) even the request violates a data
-     * size constraint.
+     * 返回true如果即使请求违反数据大小约束，仍将读取（吞没）剩余请求数据
      *
-     * @return <code>true</code> if data will be swallowed (default), <code>false</code> otherwise.
+     * @return true表示会吞没数据（默认），false否则
      */
     boolean getSwallowAbortedUploads();
 
 
     /**
-     * Set to <code>false</code> to disable request data swallowing after an upload was aborted due to size constraints.
+     * 设置为false以禁用因大小约束而中止上传后请求数据的吞没
      *
-     * @param swallowAbortedUploads <code>false</code> to disable swallowing, <code>true</code> otherwise (default).
+     * @param swallowAbortedUploads false表示禁用吞没，true否则（默认）
      */
     void setSwallowAbortedUploads(boolean swallowAbortedUploads);
 
+
     /**
-     * @return the value of the swallowOutput flag.
+     * 返回swallowOutput标志的值
+     *
+     * @return swallowOutput标志值
      */
     boolean getSwallowOutput();
 
 
     /**
-     * Set the value of the swallowOutput flag. If set to true, the system.out and system.err will be redirected to the
-     * logger during a servlet execution.
+     * 设置swallowOutput标志的值
+     * 如果设置为true，Servlet执行期间的system.out和system.err将重定向到日志记录器
      *
-     * @param swallowOutput The new value
+     * @param swallowOutput 新值
      */
     void setSwallowOutput(boolean swallowOutput);
 
 
     /**
-     * @return the Java class name of the Wrapper implementation used for servlets registered in this Context.
+     * 返回此Context中注册的Servlet使用的Wrapper实现的Java类名
+     *
+     * @return Wrapper实现类名
      */
     String getWrapperClass();
 
 
     /**
-     * Set the Java class name of the Wrapper implementation used for servlets registered in this Context.
+     * 设置此Context中注册的Servlet使用的Wrapper实现的Java类名
      *
-     * @param wrapperClass The new wrapper class
+     * @param wrapperClass 新的Wrapper类
      */
     void setWrapperClass(String wrapperClass);
 
 
     /**
-     * Will the parsing of web.xml and web-fragment.xml files for this Context be performed by a namespace aware parser?
+     * 此Context的web.xml和web-fragment.xml文件的解析是否使用支持命名空间的解析器？
      *
-     * @return true if namespace awareness is enabled.
+     * @return true如果启用了命名空间感知
      */
     boolean getXmlNamespaceAware();
 
 
     /**
-     * Controls whether the parsing of web.xml and web-fragment.xml files for this Context will be performed by a
-     * namespace aware parser.
+     * 控制此Context的web.xml和web-fragment.xml文件的解析是否使用支持命名空间的解析器
      *
-     * @param xmlNamespaceAware true to enable namespace awareness
+     * @param xmlNamespaceAware true以启用命名空间感知
      */
     void setXmlNamespaceAware(boolean xmlNamespaceAware);
 
 
     /**
-     * Will the parsing of web.xml and web-fragment.xml files for this Context be performed by a validating parser?
+     * 此Context的web.xml和web-fragment.xml文件的解析是否使用验证解析器？
      *
-     * @return true if validation is enabled.
+     * @return true如果启用了验证
      */
     boolean getXmlValidation();
 
 
     /**
-     * Controls whether the parsing of web.xml and web-fragment.xml files for this Context will be performed by a
-     * validating parser.
+     * 控制此Context的web.xml和web-fragment.xml文件的解析是否使用验证解析器
      *
-     * @param xmlValidation true to enable xml validation
+     * @param xmlValidation true以启用XML验证
      */
     void setXmlValidation(boolean xmlValidation);
 
 
     /**
-     * Will the parsing of web.xml, web-fragment.xml, *.tld, *.jspx, *.tagx and tagplugin.xml files for this Context
-     * block the use of external entities?
+     * 此Context的web.xml、web-fragment.xml、*.tld、*.jspx、*.tagx和tagplugin.xml文件的解析
+     * 是否会阻止使用外部实体？
      *
-     * @return true if access to external entities is blocked
+     * @return true如果阻止外部实体的访问
      */
     boolean getXmlBlockExternal();
 
 
     /**
-     * Controls whether the parsing of web.xml, web-fragment.xml, *.tld, *.jspx, *.tagx and tagplugin.xml files for this
-     * Context will block the use of external entities.
+     * 控制此Context的web.xml、web-fragment.xml、*.tld、*.jspx、*.tagx和tagplugin.xml文件的解析
+     * 是否会阻止使用外部实体
      *
-     * @param xmlBlockExternal true to block external entities
+     * @param xmlBlockExternal true以阻止外部实体
      */
     void setXmlBlockExternal(boolean xmlBlockExternal);
 
 
     /**
-     * Will the parsing of *.tld files for this Context be performed by a validating parser?
+     * 此Context的*.tld文件的解析是否使用验证解析器？
      *
-     * @return true if validation is enabled.
+     * @return true如果启用了验证
      */
     boolean getTldValidation();
 
 
     /**
-     * Controls whether the parsing of *.tld files for this Context will be performed by a validating parser.
+     * 控制此Context的*.tld文件的解析是否使用验证解析器
      *
-     * @param tldValidation true to enable xml validation
+     * @param tldValidation true以启用XML验证
      */
     void setTldValidation(boolean tldValidation);
 
 
     /**
-     * Get the Jar Scanner to be used to scan for JAR resources for this context.
+     * 获取用于扫描此上下文JAR资源的Jar Scanner
      *
-     * @return The Jar Scanner configured for this context.
+     * @return 为此上下文配置的Jar Scanner
      */
     JarScanner getJarScanner();
 
+
     /**
-     * Set the Jar Scanner to be used to scan for JAR resources for this context.
+     * 设置用于扫描此上下文JAR资源的Jar Scanner
      *
-     * @param jarScanner The Jar Scanner to be used for this context.
+     * @param jarScanner 用于此上下文的Jar Scanner
      */
     void setJarScanner(JarScanner jarScanner);
 
+
     /**
-     * @return the {@link Authenticator} that is used by this context. This is always non-{@code null} for a started
-     *             Context
+     * 返回此上下文使用的Authenticator
+     * 对于已启动的Context，此值始终非null
+     *
+     * @return Authenticator实例
      */
     Authenticator getAuthenticator();
 
+
     /**
-     * Set whether or not the effective web.xml for this context should be logged on context start.
+     * 设置是否应在上下文启动时记录此上下文的有效web.xml
      *
-     * @param logEffectiveWebXml set to <code>true</code> to log the complete web.xml that will be used for the webapp
+     * @param logEffectiveWebXml 设置为true以记录将用于Web应用的完整web.xml
      */
     void setLogEffectiveWebXml(boolean logEffectiveWebXml);
 
+
     /**
-     * Should the effective web.xml for this context be logged on context start?
+     * 上下文启动时是否应记录此上下文的有效web.xml？
      *
-     * @return true if the reconstructed web.xml that will be used for the webapp should be logged
+     * @return true如果应记录将用于Web应用的重建web.xml
      */
     boolean getLogEffectiveWebXml();
 
+
     /**
-     * @return the instance manager associated with this context.
+     * 返回与此上下文关联的实例管理器
+     *
+     * @return 实例管理器
      */
     InstanceManager getInstanceManager();
 
+
     /**
-     * Set the instance manager associated with this context.
+     * 设置与此上下文关联的实例管理器
      *
-     * @param instanceManager the new instance manager instance
+     * @param instanceManager 新的实例管理器实例
      */
     void setInstanceManager(InstanceManager instanceManager);
 
+
     /**
-     * Sets the regular expression that specifies which container provided SCIs should be filtered out and not used for
-     * this context. Matching uses {@link java.util.regex.Matcher#find()} so the regular expression only has to match a
-     * sub-string of the fully qualified class name of the container provided SCI for it to be filtered out.
+     * 设置正则表达式，指定应过滤掉且不用于此上下文的容器提供的SCI
+     * 匹配使用Matcher.find()，因此正则表达式只需匹配容器提供的SCI的完全限定类名的子字符串
      *
-     * @param containerSciFilter The regular expression against which the fully qualified class name of each container
-     *                               provided SCI should be checked
+     * @param containerSciFilter 应针对每个容器提供的SCI的完全限定类名检查的正则表达式
      */
     void setContainerSciFilter(String containerSciFilter);
 
+
     /**
-     * Obtains the regular expression that specifies which container provided SCIs should be filtered out and not used
-     * for this context. Matching uses {@link java.util.regex.Matcher#find()} so the regular expression only has to
-     * match a sub-string of the fully qualified class name of the container provided SCI for it to be filtered out.
+     * 获取正则表达式，指定应过滤掉且不用于此上下文的容器提供的SCI
+     * 匹配使用Matcher.find()，因此正则表达式只需匹配容器提供的SCI的完全限定类名的子字符串
      *
-     * @return The regular expression against which the fully qualified class name of each container provided SCI will
-     *             be checked
+     * @return 应针对每个容器提供的SCI的完全限定类名检查的正则表达式
      */
     String getContainerSciFilter();
 
 
     /**
-     * @return the value of the parallel annotation scanning flag. If true, it will dispatch scanning to the utility
-     *             executor.
+     * 返回并行注释扫描标志的值
+     * 如果为true，将调度扫描到实用程序执行器
      *
-     * @deprecated This method will be removed in Tomcat 11 onwards
+     * @deprecated 此方法将在Tomcat 11及以后版本中删除
      */
     @Deprecated
     default boolean isParallelAnnotationScanning() {
         return getParallelAnnotationScanning();
     }
 
+
     /**
-     * @return the value of the parallel annotation scanning flag. If true, it will dispatch scanning to the utility
-     *             executor.
+     * 返回并行注释扫描标志的值
+     * 如果为true，将调度扫描到实用程序执行器
+     *
+     * @return 并行注释扫描标志值
      */
     boolean getParallelAnnotationScanning();
 
+
     /**
-     * Set the parallel annotation scanning value.
+     * 设置并行注释扫描值
      *
-     * @param parallelAnnotationScanning new parallel annotation scanning flag
+     * @param parallelAnnotationScanning 新的并行注释扫描标志
      */
     void setParallelAnnotationScanning(boolean parallelAnnotationScanning);
 
 
-    // --------------------------------------------------------- Public Methods
+    // --------------------------------------------------------- 公共方法
 
     /**
-     * Add a new Listener class name to the set of Listeners configured for this application.
+     * 向为此应用程序配置的监听器集合添加新的监听器类名
      *
-     * @param listener Java class name of a listener class
+     * @param listener 监听器类的Java类名
      */
     void addApplicationListener(String listener);
 
 
     /**
-     * Add a new application parameter for this application.
+     * 为此应用程序添加新的应用程序参数
      *
-     * @param parameter The new application parameter
+     * @param parameter 新的应用程序参数
      */
     void addApplicationParameter(ApplicationParameter parameter);
 
 
     /**
-     * Add a security constraint to the set for this web application.
+     * 向此Web应用的集合添加安全约束
      *
-     * @param constraint The security constraint that should be added
+     * @param constraint 应添加的安全约束
      */
     void addConstraint(SecurityConstraint constraint);
 
 
     /**
-     * Add an error page for the specified error or Java exception.
+     * 为指定的错误或Java异常添加错误页面
      *
-     * @param errorPage The error page definition to be added
+     * @param errorPage 要添加的错误页面定义
      */
     void addErrorPage(ErrorPage errorPage);
 
 
     /**
-     * Add a filter definition to this Context.
+     * 向此Context添加过滤器定义
      *
-     * @param filterDef The filter definition to be added
+     * @param filterDef 要添加的过滤器定义
      */
     void addFilterDef(FilterDef filterDef);
 
 
     /**
-     * Add a filter mapping to this Context.
+     * 向此Context添加过滤器映射
      *
-     * @param filterMap The filter mapping to be added
+     * @param filterMap 要添加的过滤器映射
      */
     void addFilterMap(FilterMap filterMap);
 
+
     /**
-     * Add a filter mapping to this Context before the mappings defined in the deployment descriptor but after any other
-     * mappings added via this method.
+     * 在部署描述符中定义的映射之前但在通过此方法添加的任何其他映射之后
+     * 向此Context添加过滤器映射
      *
-     * @param filterMap The filter mapping to be added
-     *
-     * @exception IllegalArgumentException if the specified filter name does not match an existing filter definition, or
-     *                                         the filter mapping is malformed
+     * @param filterMap 要添加的过滤器映射
+     * @exception IllegalArgumentException 如果指定的过滤器名称与现有过滤器定义不匹配
+     * 或过滤器映射格式错误
      */
     void addFilterMapBefore(FilterMap filterMap);
 
 
     /**
-     * Add a Locale Encoding Mapping (see Sec 5.4 of Servlet spec 2.4)
+     * 添加Locale编码映射（请参阅Servlet规范2.4的第5.4节）
      *
-     * @param locale   locale to map an encoding for
-     * @param encoding encoding to be used for a give locale
+     * @param locale 要映射编码的Locale
+     * @param encoding 用于给定Locale的编码
      */
     void addLocaleEncodingMappingParameter(String locale, String encoding);
 
 
     /**
-     * Add a new MIME mapping, replacing any existing mapping for the specified extension.
+     * 添加新的MIME映射，替换指定扩展名的任何现有映射
      *
-     * @param extension Filename extension being mapped
-     * @param mimeType  Corresponding MIME type
+     * @param extension 要映射的文件扩展名
+     * @param mimeType 对应的MIME类型
      */
     void addMimeMapping(String extension, String mimeType);
 
 
     /**
-     * Add a new context initialization parameter, replacing any existing value for the specified name.
+     * 添加新的上下文初始化参数，替换指定名称的任何现有值
      *
-     * @param name  Name of the new parameter
-     * @param value Value of the new parameter
+     * @param name 新参数的名称
+     * @param value 新参数的值
      */
     void addParameter(String name, String value);
 
 
     /**
-     * Add a security role reference for this web application.
+     * 为此Web应用添加安全角色引用
      *
-     * @param role Security role used in the application
-     * @param link Actual security role to check for
+     * @param role 应用程序中使用的安全角色
+     * @param link 要检查的实际安全角色
      */
     void addRoleMapping(String role, String link);
 
 
     /**
-     * Add a new security role for this web application.
+     * 为此Web应用添加新的安全角色
      *
-     * @param role New security role
+     * @param role 新的安全角色
      */
     void addSecurityRole(String role);
 
 
     /**
-     * Add a new servlet mapping, replacing any existing mapping for the specified pattern.
+     * 添加新的Servlet映射，替换指定模式的任何现有映射
      *
-     * @param pattern URL pattern to be mapped
-     * @param name    Name of the corresponding servlet to execute
+     * @param pattern 要映射的URL模式
+     * @param name 要执行的相应Servlet的名称
      */
     default void addServletMappingDecoded(String pattern, String name) {
         addServletMappingDecoded(pattern, name, false);
@@ -886,973 +870,1080 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Add a new servlet mapping, replacing any existing mapping for the specified pattern.
+     * 添加新的Servlet映射，替换指定模式的任何现有映射
      *
-     * @param pattern     URL pattern to be mapped
-     * @param name        Name of the corresponding servlet to execute
-     * @param jspWildcard true if name identifies the JspServlet and pattern contains a wildcard; false otherwise
+     * @param pattern 要映射的URL模式
+     * @param name 要执行的相应Servlet的名称
+     * @param jspWildcard true如果名称标识JspServlet且模式包含通配符，否则false
      */
     void addServletMappingDecoded(String pattern, String name, boolean jspWildcard);
 
 
     /**
-     * Add a resource which will be watched for reloading by the host auto deployer. Note: this will not be used in
-     * embedded mode.
+     * 添加将由主机自动部署程序监视重新加载的资源
+     * 注意：在嵌入式模式下不使用
      *
-     * @param name Path to the resource, relative to docBase
+     * @param name 资源路径，相对于docBase
      */
     void addWatchedResource(String name);
 
 
     /**
-     * Add a new welcome file to the set recognized by this Context.
+     * 向此Context识别的集合添加新的欢迎文件
      *
-     * @param name New welcome file name
+     * @param name 新的欢迎文件名
      */
     void addWelcomeFile(String name);
 
 
     /**
-     * Add the classname of a LifecycleListener to be added to each Wrapper appended to this Context.
+     * 添加将添加到附加到此Context的每个Wrapper的LifecycleListener的类名
      *
-     * @param listener Java class name of a LifecycleListener class
+     * @param listener LifecycleListener类的Java类名
      */
     void addWrapperLifecycle(String listener);
 
 
     /**
-     * Add the classname of a ContainerListener to be added to each Wrapper appended to this Context.
+     * 添加将添加到附加到此Context的每个Wrapper的ContainerListener的类名
      *
-     * @param listener Java class name of a ContainerListener class
+     * @param listener ContainerListener类的Java类名
      */
     void addWrapperListener(String listener);
 
 
     /**
-     * Factory method to create and return a new InstanceManager instance. This can be used for framework integration or
-     * easier configuration with custom Context implementations.
+     * 工厂方法，创建并返回新的InstanceManager实例
+     * 可用于框架集成或使用自定义Context实现更轻松地配置
      *
-     * @return the instance manager
+     * @return 实例管理器
      */
     InstanceManager createInstanceManager();
 
+
     /**
-     * Factory method to create and return a new Wrapper instance, of the Java implementation class appropriate for this
-     * Context implementation. The constructor of the instantiated Wrapper will have been called, but no properties will
-     * have been set.
+     * 工厂方法，创建并返回新的Wrapper实例
+     * 适用于此Context实现的Java实现类
+     * 已调用实例化Wrapper的构造函数，但未设置任何属性
      *
-     * @return a newly created wrapper instance that is used to wrap a Servlet
+     * @return 新创建的Wrapper实例，用于包装Servlet
      */
     Wrapper createWrapper();
 
 
     /**
-     * @return the array of application listener class names configured for this application.
+     * 返回为此应用程序配置的应用程序监听器类名数组
+     *
+     * @return 应用程序监听器类名数组
      */
     String[] findApplicationListeners();
 
 
     /**
-     * @return the array of application parameters for this application.
+     * 返回此应用程序的应用程序参数数组
+     *
+     * @return 应用程序参数数组
      */
     ApplicationParameter[] findApplicationParameters();
 
 
     /**
-     * @return the array of security constraints for this web application. If there are none, a zero-length array is
-     *             returned.
+     * 返回此Web应用的安全约束数组
+     * 如果没有，返回零长度数组
+     *
+     * @return 安全约束数组
      */
     SecurityConstraint[] findConstraints();
 
 
     /**
-     * @return the error page entry for the specified HTTP error code, if any; otherwise return <code>null</code>.
+     * 返回指定HTTP错误代码的错误页面条目（如果有），否则返回null
      *
-     * @param errorCode Error code to look up
+     * @param errorCode 要查找的错误代码
+     * @return 错误页面条目
      */
     ErrorPage findErrorPage(int errorCode);
 
 
     /**
-     * Find and return the ErrorPage instance for the specified exception's class, or an ErrorPage instance for the
-     * closest superclass for which there is such a definition. If no associated ErrorPage instance is found, return
-     * <code>null</code>.
+     * 查找并返回指定异常类的ErrorPage实例
+     * 或找到的最接近超类的ErrorPage实例
+     * 如果未找到关联的ErrorPage实例，返回null
      *
-     * @param throwable The exception type for which to find an ErrorPage
-     *
-     * @return the error page entry for the specified Java exception type, if any; otherwise return {@code null}.
+     * @param throwable 要查找ErrorPage的异常类型
+     * @return 指定Java异常类型的错误页面条目（如果有），否则返回null
      */
     ErrorPage findErrorPage(Throwable throwable);
 
 
     /**
-     * @return the array of defined error pages for all specified error codes and exception types.
+     * 返回所有指定错误代码和异常类型的已定义错误页面数组
+     *
+     * @return 错误页面数组
      */
     ErrorPage[] findErrorPages();
 
 
     /**
-     * @return the filter definition for the specified filter name, if any; otherwise return <code>null</code>.
+     * 返回指定过滤器名称的过滤器定义（如果有），否则返回null
      *
-     * @param filterName Filter name to look up
+     * @param filterName 要查找的过滤器名称
+     * @return 过滤器定义
      */
     FilterDef findFilterDef(String filterName);
 
 
     /**
-     * @return the array of defined filters for this Context.
+     * 返回此Context的已定义过滤器数组
+     *
+     * @return 过滤器定义数组
      */
     FilterDef[] findFilterDefs();
 
 
     /**
-     * @return the array of filter mappings for this Context.
+     * 返回此Context的过滤器映射数组
+     *
+     * @return 过滤器映射数组
      */
     FilterMap[] findFilterMaps();
 
 
     /**
-     * @return the MIME type to which the specified extension is mapped, if any; otherwise return <code>null</code>.
+     * 返回指定扩展名映射到的MIME类型（如果有），否则返回null
      *
-     * @param extension Extension to map to a MIME type
+     * @param extension 要映射到MIME类型的扩展名
+     * @return MIME类型
      */
     String findMimeMapping(String extension);
 
 
     /**
-     * @return the extensions for which MIME mappings are defined. If there are none, a zero-length array is returned.
+     * 返回定义了MIME映射的扩展名
+     * 如果没有，返回零长度数组
+     *
+     * @return 扩展名数组
      */
     String[] findMimeMappings();
 
 
     /**
-     * @return the value for the specified context initialization parameter name, if any; otherwise return
-     *             <code>null</code>.
+     * 返回指定上下文初始化参数名称的值（如果有），否则返回null
      *
-     * @param name Name of the parameter to return
+     * @param name 要返回的参数名称
+     * @return 参数值
      */
     String findParameter(String name);
 
 
     /**
-     * @return the names of all defined context initialization parameters for this Context. If no parameters are
-     *             defined, a zero-length array is returned.
+     * 返回此Context的所有已定义上下文初始化参数的名称
+     * 如果未定义参数，返回零长度数组
+     *
+     * @return 参数名称数组
      */
     String[] findParameters();
 
 
     /**
-     * For the given security role (as used by an application), return the corresponding role name (as defined by the
-     * underlying Realm) if there is one. Otherwise, return the specified role unchanged.
+     * 对于给定的安全角色（如应用程序所使用），返回对应的角色名称
+     * （如底层Realm所定义），如果有的话
+     * 否则，返回指定的角色（不变）
      *
-     * @param role Security role to map
-     *
-     * @return The role name that was mapped to the specified role
+     * @param role 要映射的安全角色
+     * @return 映射到指定角色的角色名称
      */
     String findRoleMapping(String role);
 
 
     /**
-     * @return <code>true</code> if the specified security role is defined for this application; otherwise return
-     *             <code>false</code>.
+     * 如果为此应用程序定义了指定的安全角色，返回true，否则返回false
      *
-     * @param role Security role to verify
+     * @param role 要验证的安全角色
+     * @return 验证结果
      */
     boolean findSecurityRole(String role);
 
 
     /**
-     * @return the security roles defined for this application. If none have been defined, a zero-length array is
-     *             returned.
+     * 返回为此应用程序定义的安全角色
+     * 如果未定义任何角色，返回零长度数组
+     *
+     * @return 安全角色数组
      */
     String[] findSecurityRoles();
 
 
     /**
-     * @return the servlet name mapped by the specified pattern (if any); otherwise return <code>null</code>.
+     * 返回由指定模式映射的Servlet名称（如果有），否则返回null
      *
-     * @param pattern Pattern for which a mapping is requested
+     * @param pattern 请求映射的模式
+     * @return Servlet名称
      */
     String findServletMapping(String pattern);
 
 
     /**
-     * @return the patterns of all defined servlet mappings for this Context. If no mappings are defined, a zero-length
-     *             array is returned.
+     * 返回此Context的所有已定义Servlet映射的模式
+     * 如果未定义映射，返回零长度数组
+     *
+     * @return Servlet映射模式数组
      */
     String[] findServletMappings();
 
 
     /**
-     * @return the associated ThreadBindingListener.
+     * 返回关联的ThreadBindingListener
+     *
+     * @return ThreadBindingListener实例
      */
     ThreadBindingListener getThreadBindingListener();
 
 
     /**
-     * Get the associated ThreadBindingListener.
+     * 设置关联的ThreadBindingListener
      *
-     * @param threadBindingListener Set the listener that will receive notifications when entering and exiting the
-     *                                  application scope
+     * @param threadBindingListener 当进入和退出应用程序作用域时将接收通知的监听器
      */
     void setThreadBindingListener(ThreadBindingListener threadBindingListener);
 
 
     /**
-     * @return the array of watched resources for this Context. If none are defined, a zero length array will be
-     *             returned.
+     * 返回此Context的观察资源数组
+     * 如果未定义，返回零长度数组
+     *
+     * @return 观察资源数组
      */
     String[] findWatchedResources();
 
 
     /**
-     * @return <code>true</code> if the specified welcome file is defined for this Context; otherwise return
-     *             <code>false</code>.
+     * 如果为此Context定义了指定的欢迎文件，返回true，否则返回false
      *
-     * @param name the welcome file to verify
+     * @param name 要验证的欢迎文件
+     * @return 验证结果
      */
     boolean findWelcomeFile(String name);
 
 
     /**
-     * @return the array of welcome files defined for this Context. If none are defined, a zero-length array is
-     *             returned.
+     * 返回为此Context定义的欢迎文件数组
+     * 如果未定义，返回零长度数组
+     *
+     * @return 欢迎文件数组
      */
     String[] findWelcomeFiles();
 
 
     /**
-     * @return the array of LifecycleListener classes that will be added to newly created Wrappers automatically.
+     * 返回将自动添加到新创建的Wrapper的LifecycleListener类数组
+     *
+     * @return LifecycleListener类数组
      */
     String[] findWrapperLifecycles();
 
 
     /**
-     * @return the array of ContainerListener classes that will be added to newly created Wrappers automatically.
+     * 返回将自动添加到新创建的Wrapper的ContainerListener类数组
+     *
+     * @return ContainerListener类数组
      */
     String[] findWrapperListeners();
 
 
     /**
-     * Notify all {@link jakarta.servlet.ServletRequestListener}s that a request has started.
+     * 通知所有ServletRequestListener请求已启动
      *
-     * @param request The request object that will be passed to the listener
-     *
-     * @return <code>true</code> if the listeners fire successfully, else <code>false</code>
+     * @param request 将传递给监听器的请求对象
+     * @return true如果监听器触发成功，否则false
      */
     boolean fireRequestInitEvent(ServletRequest request);
 
+
     /**
-     * Notify all {@link jakarta.servlet.ServletRequestListener}s that a request has ended.
+     * 通知所有ServletRequestListener请求已结束
      *
-     * @param request The request object that will be passed to the listener
-     *
-     * @return <code>true</code> if the listeners fire successfully, else <code>false</code>
+     * @param request 将传递给监听器的请求对象
+     * @return true如果监听器触发成功，否则false
      */
     boolean fireRequestDestroyEvent(ServletRequest request);
 
+
     /**
-     * Reload this web application, if reloading is supported.
+     * 重新加载此Web应用（如果支持重新加载）
      *
-     * @exception IllegalStateException if the <code>reloadable</code> property is set to <code>false</code>.
+     * @exception IllegalStateException 如果reloadable属性设置为false
      */
     void reload();
 
 
     /**
-     * Remove the specified application listener class from the set of listeners for this application.
+     * 从应用程序的监听器集合中删除指定的应用程序监听器类
      *
-     * @param listener Java class name of the listener to be removed
+     * @param listener 要删除的监听器的Java类名
      */
     void removeApplicationListener(String listener);
 
 
     /**
-     * Remove the application parameter with the specified name from the set for this application.
+     * 从此应用程序的集合中删除具有指定名称的应用程序参数
      *
-     * @param name Name of the application parameter to remove
+     * @param name 要删除的应用程序参数的名称
      */
     void removeApplicationParameter(String name);
 
 
     /**
-     * Remove the specified security constraint from this web application.
+     * 从此Web应用中删除指定的安全约束
      *
-     * @param constraint Constraint to be removed
+     * @param constraint 要删除的约束
      */
     void removeConstraint(SecurityConstraint constraint);
 
 
     /**
-     * Remove the error page for the specified error code or Java language exception, if it exists; otherwise, no action
-     * is taken.
+     * 删除指定错误代码或Java语言异常的错误页面（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param errorPage The error page definition to be removed
+     * @param errorPage 要删除的错误页面定义
      */
     void removeErrorPage(ErrorPage errorPage);
 
 
     /**
-     * Remove the specified filter definition from this Context, if it exists; otherwise, no action is taken.
+     * 从此Context中删除指定的过滤器定义（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param filterDef Filter definition to be removed
+     * @param filterDef 要删除的过滤器定义
      */
     void removeFilterDef(FilterDef filterDef);
 
 
     /**
-     * Remove a filter mapping from this Context.
+     * 从此Context中删除过滤器映射
      *
-     * @param filterMap The filter mapping to be removed
+     * @param filterMap 要删除的过滤器映射
      */
     void removeFilterMap(FilterMap filterMap);
 
 
     /**
-     * Remove the MIME mapping for the specified extension, if it exists; otherwise, no action is taken.
+     * 删除指定扩展名的MIME映射（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param extension Extension to remove the mapping for
+     * @param extension 要删除映射的扩展名
      */
     void removeMimeMapping(String extension);
 
 
     /**
-     * Remove the context initialization parameter with the specified name, if it exists; otherwise, no action is taken.
+     * 删除具有指定名称的上下文初始化参数（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param name Name of the parameter to remove
+     * @param name 要删除的参数的名称
      */
     void removeParameter(String name);
 
 
     /**
-     * Remove any security role reference for the specified name
+     * 删除指定名称的任何安全角色引用
      *
-     * @param role Security role (as used in the application) to remove
+     * @param role 要删除的安全角色（如应用程序中所使用）
      */
     void removeRoleMapping(String role);
 
 
     /**
-     * Remove any security role with the specified name.
+     * 删除具有指定名称的任何安全角色
      *
-     * @param role Security role to remove
+     * @param role 要删除的安全角色
      */
     void removeSecurityRole(String role);
 
 
     /**
-     * Remove any servlet mapping for the specified pattern, if it exists; otherwise, no action is taken.
+     * 删除指定模式的任何Servlet映射（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param pattern URL pattern of the mapping to remove
+     * @param pattern 要删除的映射的URL模式
      */
     void removeServletMapping(String pattern);
 
 
     /**
-     * Remove the specified watched resource name from the list associated with this Context.
+     * 从此Context关联的列表中删除指定的观察资源名称
      *
-     * @param name Name of the watched resource to be removed
+     * @param name 要删除的观察资源的名称
      */
     void removeWatchedResource(String name);
 
 
     /**
-     * Remove the specified welcome file name from the list recognized by this Context.
+     * 从此Context识别的列表中删除指定的欢迎文件名
      *
-     * @param name Name of the welcome file to be removed
+     * @param name 要删除的欢迎文件的名称
      */
     void removeWelcomeFile(String name);
 
 
     /**
-     * Remove a class name from the set of LifecycleListener classes that will be added to newly created Wrappers.
+     * 从将添加到新创建的Wrapper的LifecycleListener类集合中删除类名
      *
-     * @param listener Class name of a LifecycleListener class to be removed
+     * @param listener 要删除的LifecycleListener类的类名
      */
     void removeWrapperLifecycle(String listener);
 
 
     /**
-     * Remove a class name from the set of ContainerListener classes that will be added to newly created Wrappers.
+     * 从将添加到新创建的Wrapper的ContainerListener类集合中删除类名
      *
-     * @param listener Class name of a ContainerListener class to be removed
+     * @param listener 要删除的ContainerListener类的类名
      */
     void removeWrapperListener(String listener);
 
 
     /**
-     * @return the real path for a given virtual path, if possible; otherwise return <code>null</code>.
+     * 返回给定虚拟路径的真实路径（如果可能），否则返回null
      *
-     * @param path The path to the desired resource
+     * @param path 所需资源的路径
+     * @return 真实路径
      */
     String getRealPath(String path);
 
 
     /**
-     * @return the effective major version of the Servlet spec used by this context.
+     * 返回此Context使用的Servlet规范的有效主版本
+     *
+     * @return Servlet规范主版本号
      */
     int getEffectiveMajorVersion();
 
 
     /**
-     * Set the effective major version of the Servlet spec used by this context.
+     * 设置此Context使用的Servlet规范的有效主版本
      *
-     * @param major Set the version number
+     * @param major 版本号
      */
     void setEffectiveMajorVersion(int major);
 
 
     /**
-     * @return the effective minor version of the Servlet spec used by this context.
+     * 返回此Context使用的Servlet规范的有效次版本
+     *
+     * @return Servlet规范次版本号
      */
     int getEffectiveMinorVersion();
 
 
     /**
-     * Set the effective minor version of the Servlet spec used by this context.
+     * 设置此Context使用的Servlet规范的有效次版本
      *
-     * @param minor Set the version number
+     * @param minor 版本号
      */
     void setEffectiveMinorVersion(int minor);
 
 
     /**
-     * @return the JSP configuration for this context. Will be null if there is no JSP configuration.
+     * 返回此Context的JSP配置
+     * 如果没有JSP配置，将为null
+     *
+     * @return JSP配置描述符
      */
     JspConfigDescriptor getJspConfigDescriptor();
 
 
     /**
-     * Set the JspConfigDescriptor for this context. A null value indicates there is not JSP configuration.
+     * 设置此Context的JspConfigDescriptor
+     * null值表示没有JSP配置
      *
-     * @param descriptor the new JSP configuration
+     * @param descriptor 新的JSP配置
      */
     void setJspConfigDescriptor(JspConfigDescriptor descriptor);
 
 
     /**
-     * Add a ServletContainerInitializer instance to this web application.
+     * 向此Web应用添加ServletContainerInitializer实例
      *
-     * @param sci     The instance to add
-     * @param classes The classes in which the initializer expressed an interest
+     * @param sci 要添加的实例
+     * @param classes 初始化器感兴趣的类
      */
     void addServletContainerInitializer(ServletContainerInitializer sci, Set<Class<?>> classes);
 
 
     /**
-     * Is this Context paused whilst it is reloaded?
+     * 此Context在重新加载时是否已暂停？
      *
-     * @return <code>true</code> if the context has been paused
+     * @return true如果上下文已暂停
      */
     boolean getPaused();
 
 
     /**
-     * Is this context using version 2.2 of the Servlet spec?
+     * 此Context是否使用Servlet规范2.2版本？
      *
-     * @return <code>true</code> for a legacy Servlet 2.2 webapp
+     * @return true表示传统的Servlet 2.2 Web应用
      */
     boolean isServlet22();
 
 
     /**
-     * Notification that Servlet security has been dynamically set in a
-     * {@link jakarta.servlet.ServletRegistration.Dynamic}
+     * 通知Servlet安全已在Dynamic ServletRegistration中动态设置
      *
-     * @param registration           Servlet security was modified for
-     * @param servletSecurityElement new security constraints for this Servlet
-     *
-     * @return urls currently mapped to this registration that are already present in web.xml
+     * @param registration Servlet安全已修改
+     * @param servletSecurityElement 此Servlet的新安全约束
+     * @return 目前映射到此外部化的URL，这些URL已存在于web.xml中
      */
     Set<String> addServletSecurity(ServletRegistration.Dynamic registration,
-            ServletSecurityElement servletSecurityElement);
+                                   ServletSecurityElement servletSecurityElement);
+
 
     /**
-     * Sets the (comma separated) list of Servlets that expect a resource to be present. Used to ensure that welcome
-     * files associated with Servlets that expect a resource to be present are not mapped when there is no resource.
+     * 设置（逗号分隔）期望资源存在的Servlet列表
+     * 用于确保与期望资源存在的Servlet关联的欢迎文件
+     * 在没有资源时不映射
      *
-     * @param resourceOnlyServlets The Servlet names comma separated list
+     * @param resourceOnlyServlets Servlet名称的逗号分隔列表
      */
     void setResourceOnlyServlets(String resourceOnlyServlets);
 
+
     /**
-     * Obtains the list of Servlets that expect a resource to be present.
+     * 获取期望资源存在的Servlet列表
      *
-     * @return A comma separated list of Servlet names as used in web.xml
+     * @return web.xml中使用的Servlet名称的逗号分隔列表
      */
     String getResourceOnlyServlets();
 
+
     /**
-     * Checks the named Servlet to see if it expects a resource to be present.
+     * 检查指定的Servlet是否期望资源存在
      *
-     * @param servletName Name of the Servlet (as per web.xml) to check
-     *
-     * @return <code>true</code> if the Servlet expects a resource, otherwise <code>false</code>
+     * @param servletName 要检查的Servlet名称（如web.xml中所示）
+     * @return true如果Servlet期望资源，否则false
      */
     boolean isResourceOnlyServlet(String servletName);
 
+
     /**
-     * @return the base name to use for WARs, directories or context.xml files for this context.
+     * 返回用于此Context的WAR、目录或context.xml文件的基本名称
+     *
+     * @return 基本名称
      */
     String getBaseName();
 
+
     /**
-     * Set the version of this web application - used to differentiate different versions of the same web application
-     * when using parallel deployment.
+     * 设置此Web应用的版本
+     * 用于在使用并行部署时区分同一Web应用的不同版本
      *
-     * @param webappVersion The webapp version associated with the context, which should be unique
+     * @param webappVersion 与此Context关联的Web应用版本，应唯一
      */
     void setWebappVersion(String webappVersion);
 
+
     /**
-     * @return The version of this web application, used to differentiate different versions of the same web application
-     *             when using parallel deployment. If not specified, defaults to the empty string.
+     * 返回此Web应用的版本
+     * 用于在使用并行部署时区分同一Web应用的不同版本
+     * 如果未指定，默认为空字符串
+     *
+     * @return Web应用版本
      */
     String getWebappVersion();
 
+
     /**
-     * Configure whether or not requests listeners will be fired on forwards for this Context.
+     * 配置是否为此Context的转发请求触发请求监听器
      *
-     * @param enable <code>true</code> to fire request listeners when forwarding
+     * @param enable true表示转发时触发请求监听器
      */
     void setFireRequestListenersOnForwards(boolean enable);
 
+
     /**
-     * @return whether or not requests listeners will be fired on forwards for this Context.
+     * 返回是否为此Context的转发请求触发请求监听器
+     *
+     * @return 是否触发请求监听器
      */
     boolean getFireRequestListenersOnForwards();
 
+
     /**
-     * Configures if a user presents authentication credentials, whether the context will process them when the request
-     * is for a non-protected resource.
+     * 配置如果用户提供了身份验证凭据
+     * 当请求是针对非受保护资源时，上下文是否将处理它们
      *
-     * @param enable <code>true</code> to perform authentication even outside security constraints
+     * @param enable true表示即使在安全约束之外也执行身份验证
      */
     void setPreemptiveAuthentication(boolean enable);
 
+
     /**
-     * @return if a user presents authentication credentials, will the context will process them when the request is for
-     *             a non-protected resource.
+     * 返回如果用户提供了身份验证凭据
+     * 当请求是针对非受保护资源时，上下文是否将处理它们
+     *
+     * @return 处理验证的标志
      */
     boolean getPreemptiveAuthentication();
 
+
     /**
-     * Configures if a response body is included when a redirect response is sent to the client.
+     * 配置将重定向响应发送到客户端时是否包含响应体
      *
-     * @param enable <code>true</code> to send a response body for redirects
+     * @param enable true表示为重定向发送响应体
      */
     void setSendRedirectBody(boolean enable);
 
+
     /**
-     * @return if the context is configured to include a response body as part of a redirect response.
+     * 返回上下文是否配置为将响应体作为重定向响应的一部分
+     *
+     * @return 重定向时是否发送响应体
      */
     boolean getSendRedirectBody();
 
+
     /**
-     * @return the Loader with which this Context is associated.
+     * 返回与此Context关联的Loader
+     *
+     * @return Loader实例
      */
     Loader getLoader();
 
+
     /**
-     * Set the Loader with which this Context is associated.
+     * 设置与此Context关联的Loader
      *
-     * @param loader The newly associated loader
+     * @param loader 新关联的Loader
      */
     void setLoader(Loader loader);
 
+
     /**
-     * @return the Resources with which this Context is associated.
+     * 返回与此Context关联的Resources
+     *
+     * @return WebResourceRoot实例
      */
     WebResourceRoot getResources();
 
+
     /**
-     * Set the Resources object with which this Context is associated.
+     * 设置与此Context关联的Resources对象
      *
-     * @param resources The newly associated Resources
+     * @param resources 新关联的Resources
      */
     void setResources(WebResourceRoot resources);
 
+
     /**
-     * @return the Manager with which this Context is associated. If there is no associated Manager, return
-     *             <code>null</code>.
+     * 返回与此Context关联的Manager
+     * 如果没有关联的Manager，返回null
+     *
+     * @return Manager实例
      */
     Manager getManager();
 
 
     /**
-     * Set the Manager with which this Context is associated.
+     * 设置与此Context关联的Manager
      *
-     * @param manager The newly associated Manager
+     * @param manager 新关联的Manager
      */
     void setManager(Manager manager);
 
+
     /**
-     * Sets the flag that indicates if /WEB-INF/classes should be treated like an exploded JAR and JAR resources made
-     * available as if they were in a JAR.
+     * 设置标志，指示是否应将/WEB-INF/classes视为展开的JAR
+     * 并使JAR资源可用，就像它们在JAR中一样
      *
-     * @param addWebinfClassesResources The new value for the flag
+     * @param addWebinfClassesResources 标志的新值
      */
     void setAddWebinfClassesResources(boolean addWebinfClassesResources);
 
+
     /**
-     * @return the flag that indicates if /WEB-INF/classes should be treated like an exploded JAR and JAR resources made
-     *             available as if they were in a JAR.
+     * 返回标志，指示是否应将/WEB-INF/classes视为展开的JAR
+     * 并使JAR资源可用，就像它们在JAR中一样
+     *
+     * @return 标志值
      */
     boolean getAddWebinfClassesResources();
 
+
     /**
-     * Add a post construct method definition for the given class, if there is an existing definition for the specified
-     * class - IllegalArgumentException will be thrown.
+     * 为给定类添加后置构造方法定义
+     * 如果存在指定类的现有定义，将抛出IllegalArgumentException
      *
-     * @param clazz  Fully qualified class name
-     * @param method Post construct method name
-     *
-     * @throws IllegalArgumentException if the fully qualified class name or method name are <code>NULL</code>; if there
-     *                                      is already post construct method definition for the given class
+     * @param clazz 完全限定类名
+     * @param method 后置构造方法名
+     * @throws IllegalArgumentException 如果完全限定类名或方法名为null
+     * 或给定类已存在后置构造方法定义
      */
     void addPostConstructMethod(String clazz, String method);
 
+
     /**
-     * Add a pre destroy method definition for the given class, if there is an existing definition for the specified
-     * class - IllegalArgumentException will be thrown.
+     * 为给定类添加前置销毁方法定义
+     * 如果存在指定类的现有定义，将抛出IllegalArgumentException
      *
-     * @param clazz  Fully qualified class name
-     * @param method Post construct method name
-     *
-     * @throws IllegalArgumentException if the fully qualified class name or method name are <code>NULL</code>; if there
-     *                                      is already pre destroy method definition for the given class
+     * @param clazz 完全限定类名
+     * @param method 前置销毁方法名
+     * @throws IllegalArgumentException 如果完全限定类名或方法名为null
+     * 或给定类已存在前置销毁方法定义
      */
     void addPreDestroyMethod(String clazz, String method);
 
+
     /**
-     * Removes the post construct method definition for the given class, if it exists; otherwise, no action is taken.
+     * 删除给定类的后置构造方法定义（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param clazz Fully qualified class name
+     * @param clazz 完全限定类名
      */
     void removePostConstructMethod(String clazz);
 
+
     /**
-     * Removes the pre destroy method definition for the given class, if it exists; otherwise, no action is taken.
+     * 删除给定类的前置销毁方法定义（如果存在）
+     * 否则，不执行任何操作
      *
-     * @param clazz Fully qualified class name
+     * @param clazz 完全限定类名
      */
     void removePreDestroyMethod(String clazz);
 
+
     /**
-     * Returns the method name that is specified as post construct method for the given class, if it exists; otherwise
-     * <code>NULL</code> will be returned.
+     * 返回为给定类指定的后置构造方法的方法名（如果存在）
+     * 否则返回null
      *
-     * @param clazz Fully qualified class name
-     *
-     * @return the method name that is specified as post construct method for the given class, if it exists; otherwise
-     *             <code>NULL</code> will be returned.
+     * @param clazz 完全限定类名
+     * @return 为给定类指定的后置构造方法的方法名，否则返回null
      */
     String findPostConstructMethod(String clazz);
 
+
     /**
-     * Returns the method name that is specified as pre destroy method for the given class, if it exists; otherwise
-     * <code>NULL</code> will be returned.
+     * 返回为给定类指定的前置销毁方法的方法名（如果存在）
+     * 否则返回null
      *
-     * @param clazz Fully qualified class name
-     *
-     * @return the method name that is specified as pre destroy method for the given class, if it exists; otherwise
-     *             <code>NULL</code> will be returned.
+     * @param clazz 完全限定类名
+     * @return 为给定类指定的前置销毁方法的方法名，否则返回null
      */
     String findPreDestroyMethod(String clazz);
 
-    /**
-     * Returns a map with keys - fully qualified class names of the classes that have post construct methods and the
-     * values are the corresponding method names. If there are no such classes an empty map will be returned.
-     *
-     * @return a map with keys - fully qualified class names of the classes that have post construct methods and the
-     *             values are the corresponding method names.
-     */
-    Map<String,String> findPostConstructMethods();
 
     /**
-     * Returns a map with keys - fully qualified class names of the classes that have pre destroy methods and the values
-     * are the corresponding method names. If there are no such classes an empty map will be returned.
+     * 返回一个映射，其中键是具有后置构造方法的类的完全限定类名
+     * 值是相应的方法名
+     * 如果没有这样的类，将返回空映射
      *
-     * @return a map with keys - fully qualified class names of the classes that have pre destroy methods and the values
-     *             are the corresponding method names.
+     * @return 后置构造方法映射
      */
-    Map<String,String> findPreDestroyMethods();
+    Map<String, String> findPostConstructMethods();
+
 
     /**
-     * @return the token necessary for operations on the associated JNDI naming context.
+     * 返回一个映射，其中键是具有前置销毁方法的类的完全限定类名
+     * 值是相应的方法名
+     * 如果没有这样的类，将返回空映射
+     *
+     * @return 前置销毁方法映射
+     */
+    Map<String, String> findPreDestroyMethods();
+
+
+    /**
+     * 返回与此关联的JNDI命名上下文操作所需的令牌
+     *
+     * @return 命名令牌
      */
     Object getNamingToken();
 
+
     /**
-     * Sets the {@link CookieProcessor} that will be used to process cookies for this Context.
+     * 设置将用于此Context的Cookie处理的CookieProcessor
      *
-     * @param cookieProcessor The new cookie processor
-     *
-     * @throws IllegalArgumentException If a {@code null} CookieProcessor is specified
+     * @param cookieProcessor 新的Cookie处理器
+     * @throws IllegalArgumentException 如果指定了null的CookieProcessor
      */
     void setCookieProcessor(CookieProcessor cookieProcessor);
 
+
     /**
-     * @return the {@link CookieProcessor} that will be used to process cookies for this Context.
+     * 返回将用于此Context的Cookie处理的CookieProcessor
+     *
+     * @return CookieProcessor实例
      */
     CookieProcessor getCookieProcessor();
 
+
     /**
-     * When a client provides the ID for a new session, should that ID be validated? The only use case for using a
-     * client provided session ID is to have a common session ID across multiple web applications. Therefore, any client
-     * provided session ID should already exist in another web application. If this check is enabled, the client
-     * provided session ID will only be used if the session ID exists in at least one other web application for the
-     * current host. Note that the following additional tests are always applied, irrespective of this setting:
+     * 当客户端提供新会话的ID时，是否应验证该ID？
+     * 客户端提供会话ID的唯一用例是在多个Web应用程序之间使用公共会话ID
+     * 因此，任何客户端提供的会话ID都应该已经存在于另一个Web应用程序中
+     * 如果启用此检查，客户端提供的会话ID将仅在当前主机的至少一个其他Web应用程序中存在时使用
+     * 请注意，无论此设置如何，始终应用以下附加测试：
      * <ul>
-     * <li>The session ID is provided by a cookie</li>
-     * <li>The session cookie has a path of {@code /}</li>
+     * <li>会话ID由Cookie提供</li>
+     * <li>会话Cookie的路径为{@code /}</li>
      * </ul>
      *
-     * @param validateClientProvidedNewSessionId {@code true} if validation should be applied
+     * @param validateClientProvidedNewSessionId true表示应应用验证
      */
     void setValidateClientProvidedNewSessionId(boolean validateClientProvidedNewSessionId);
 
+
     /**
-     * Will client provided session IDs be validated (see {@link #setValidateClientProvidedNewSessionId(boolean)})
-     * before use?
+     * 使用前是否验证客户端提供的会话ID？
      *
-     * @return {@code true} if validation will be applied. Otherwise, {@code
-     *         false}
+     * @return true表示将应用验证，否则false
      */
     boolean getValidateClientProvidedNewSessionId();
 
+
     /**
-     * If enabled, requests for a web application context root will be redirected (adding a trailing slash) by the
-     * Mapper. This is more efficient but has the side effect of confirming that the context path is valid.
+     * 如果启用，Web应用上下文根的请求将被Mapper重定向（添加尾部斜杠）
+     * 这更高效，但具有确认上下文路径有效的副作用
      *
-     * @param mapperContextRootRedirectEnabled Should the redirects be enabled?
+     * @param mapperContextRootRedirectEnabled 是否应启用重定向？
      */
     void setMapperContextRootRedirectEnabled(boolean mapperContextRootRedirectEnabled);
 
+
     /**
-     * Determines if requests for a web application context root will be redirected (adding a trailing slash) by the
-     * Mapper. This is more efficient but has the side effect of confirming that the context path is valid.
+     * 确定Web应用上下文根的请求是否将被Mapper重定向（添加尾部斜杠）
+     * 这更高效，但具有确认上下文路径有效的副作用
      *
-     * @return {@code true} if the Mapper level redirect is enabled for this Context.
+     * @return true如果为此Context启用了Mapper级重定向
      */
     boolean getMapperContextRootRedirectEnabled();
 
+
     /**
-     * If enabled, requests for a directory will be redirected (adding a trailing slash) by the Mapper. This is more
-     * efficient but has the side effect of confirming that the directory is valid.
+     * 如果启用，目录的请求将被Mapper重定向（添加尾部斜杠）
+     * 这更高效，但具有确认目录有效的副作用
      *
-     * @param mapperDirectoryRedirectEnabled Should the redirects be enabled?
+     * @param mapperDirectoryRedirectEnabled 是否应启用重定向？
      */
     void setMapperDirectoryRedirectEnabled(boolean mapperDirectoryRedirectEnabled);
 
+
     /**
-     * Determines if requests for a directory will be redirected (adding a trailing slash) by the Mapper. This is more
-     * efficient but has the side effect of confirming that the directory is valid.
+     * 确定目录的请求是否将被Mapper重定向（添加尾部斜杠）
+     * 这更高效，但具有确认目录有效的副作用
      *
-     * @return {@code true} if the Mapper level redirect is enabled for this Context.
+     * @return true如果为此Context启用了Mapper级重定向
      */
     boolean getMapperDirectoryRedirectEnabled();
 
+
     /**
-     * Controls whether HTTP 1.1 and later location headers generated by a call to
-     * {@link jakarta.servlet.http.HttpServletResponse#sendRedirect(String)} will use relative or absolute redirects.
+     * 控制通过调用HttpServletResponse.sendRedirect(String)生成的HTTP 1.1及更高版本的Location标头
+     * 将使用相对重定向还是绝对重定向
      * <p>
-     * Relative redirects are more efficient but may not work with reverse proxies that change the context path. It
-     * should be noted that it is not recommended to use a reverse proxy to change the context path because of the
-     * multiple issues it creates.
+     * 相对重定向更高效，但可能不适用于更改上下文路径的反向代理
+     * 应注意，不建议使用反向代理更改上下文路径，因为它会产生多个问题
      * <p>
-     * Absolute redirects should work with reverse proxies that change the context path but may cause issues with the
-     * {@link org.apache.catalina.filters.RemoteIpFilter} if the filter is changing the scheme and/or port.
+     * 绝对重定向应适用于更改上下文路径的反向代理
+     * 但如果过滤器正在更改方案和/或端口，可能会导致与RemoteIpFilter的问题
      *
-     * @param useRelativeRedirects {@code true} to use relative redirects and {@code false} to use absolute redirects
+     * @param useRelativeRedirects true表示使用相对重定向，false表示使用绝对重定向
      */
     void setUseRelativeRedirects(boolean useRelativeRedirects);
 
+
     /**
-     * Will HTTP 1.1 and later location headers generated by a call to
-     * {@link jakarta.servlet.http.HttpServletResponse#sendRedirect(String)} use relative or absolute redirects.
+     * 通过调用HttpServletResponse.sendRedirect(String)生成的HTTP 1.1及更高版本的Location标头
+     * 将使用相对重定向还是绝对重定向？
      *
-     * @return {@code true} if relative redirects will be used {@code false} if absolute redirects are used.
-     *
-     * @see #setUseRelativeRedirects(boolean)
+     * @return true如果将使用相对重定向，false如果使用绝对重定向
      */
     boolean getUseRelativeRedirects();
 
+
     /**
-     * Are paths used in calls to obtain a request dispatcher expected to be encoded? This affects both how Tomcat
-     * handles calls to obtain a request dispatcher as well as how Tomcat generates paths used to obtain request
-     * dispatchers internally.
+     * 获取请求调度程序调用中使用的路径是否应为编码的
+     * 这会影响Tomcat处理请求调度程序调用的方式
+     * 以及Tomcat内部生成用于获取请求调度程序的路径的方式
      *
-     * @param dispatchersUseEncodedPaths {@code true} to use encoded paths, otherwise {@code false}
+     * @param dispatchersUseEncodedPaths true表示使用编码路径，否则false
      */
     void setDispatchersUseEncodedPaths(boolean dispatchersUseEncodedPaths);
 
+
     /**
-     * Are paths used in calls to obtain a request dispatcher expected to be encoded? This applies to both how Tomcat
-     * handles calls to obtain a request dispatcher as well as how Tomcat generates paths used to obtain request
-     * dispatchers internally.
+     * 请求调度程序调用中使用的路径是否应为编码的？
+     * 这适用于Tomcat处理请求调度程序调用的方式
+     * 以及Tomcat内部生成用于获取请求调度程序的路径的方式
      *
-     * @return {@code true} if encoded paths will be used, otherwise {@code false}
+     * @return true如果将使用编码路径，否则false
      */
     boolean getDispatchersUseEncodedPaths();
 
+
     /**
-     * Set the default request body encoding for this web application.
+     * 设置此Web应用的默认请求体编码
      *
-     * @param encoding The default encoding
+     * @param encoding 默认编码
      */
     void setRequestCharacterEncoding(String encoding);
 
+
     /**
-     * Get the default request body encoding for this web application.
+     * 获取此Web应用的默认请求体编码
      *
-     * @return The default request body encoding
+     * @return 默认请求体编码
      */
     String getRequestCharacterEncoding();
 
+
     /**
-     * Set the default response body encoding for this web application.
+     * 设置此Web应用的默认响应体编码
      *
-     * @param encoding The default encoding
+     * @param encoding 默认编码
      */
     void setResponseCharacterEncoding(String encoding);
 
+
     /**
-     * Get the default response body encoding for this web application.
+     * 获取此Web应用的默认响应体编码
      *
-     * @return The default response body encoding
+     * @return 默认响应体编码
      */
     String getResponseCharacterEncoding();
 
+
     /**
-     * Configure if, when returning a context path from
-     * {@link jakarta.servlet.http.HttpServletRequest#getContextPath()}, the return value is allowed to contain multiple
-     * leading '/' characters.
+     * 配置从HttpServletRequest.getContextPath()返回上下文路径时
+     * 返回值是否允许包含多个前导'/'字符
      *
-     * @param allowMultipleLeadingForwardSlashInPath The new value for the flag
+     * @param allowMultipleLeadingForwardSlashInPath 标志的新值
      */
     void setAllowMultipleLeadingForwardSlashInPath(boolean allowMultipleLeadingForwardSlashInPath);
 
+
     /**
-     * When returning a context path from {@link jakarta.servlet.http.HttpServletRequest#getContextPath()}, is it
-     * allowed to contain multiple leading '/' characters?
+     * 从HttpServletRequest.getContextPath()返回上下文路径时
+     * 是否允许包含多个前导'/'字符？
      *
-     * @return <code>true</code> if multiple leading '/' characters are allowed, otherwise <code>false</code>
+     * @return true如果允许多个前导'/'字符，否则false
      */
     boolean getAllowMultipleLeadingForwardSlashInPath();
 
 
+    /**
+     * 增加进行中的异步计数
+     */
     void incrementInProgressAsyncCount();
 
 
+    /**
+     * 减少进行中的异步计数
+     */
     void decrementInProgressAsyncCount();
 
 
     /**
-     * Configure whether Tomcat will attempt to create an upload target used by this web application if it does not
-     * exist when the web application attempts to use it.
+     * 配置如果Web应用尝试使用上传目标而该目标不存在时
+     * Tomcat是否会尝试创建该目标
      *
-     * @param createUploadTargets {@code true} if Tomcat should attempt to create the upload target, otherwise
-     *                                {@code false}
+     * @param createUploadTargets true表示Tomcat应尝试创建上传目标，否则false
      */
     void setCreateUploadTargets(boolean createUploadTargets);
 
 
     /**
-     * Will Tomcat attempt to create an upload target used by this web application if it does not exist when the web
-     * application attempts to use it?
+     * 当Web应用尝试使用上传目标而该目标不存在时
+     * Tomcat是否会尝试创建该目标？
      *
-     * @return {@code true} if Tomcat will attempt to create an upload target otherwise {@code false}
+     * @return true表示Tomcat将尝试创建上传目标，否则false
      */
     boolean getCreateUploadTargets();
 
 
     /**
-     * If this is <code>true</code>, every request that is associated with a session will cause the session's last
-     * accessed time to be updated regardless of whether or not the request explicitly accesses the session. If
-     * <code>org.apache.catalina.STRICT_SERVLET_COMPLIANCE</code> is set to <code>true</code>, the default of this
-     * setting will be <code>true</code>, else the default value will be <code>false</code>.
+     * 如果为true，每个与会话关联的请求将导致会话的最后访问时间更新
+     * 无论请求是否显式访问会话
+     * 如果org.apache.catalina.STRICT_SERVLET_COMPLIANCE设置为true
+     * 此设置的默认值将为true，否则默认值为false
      *
-     * @return the flag value
+     * @return 标志值
      */
     boolean getAlwaysAccessSession();
 
 
     /**
-     * Set the session access behavior.
+     * 设置会话访问行为
      *
-     * @param alwaysAccessSession the new flag value
+     * @param alwaysAccessSession 新的标志值
      */
     void setAlwaysAccessSession(boolean alwaysAccessSession);
 
 
     /**
-     * If this is <code>true</code> then the path passed to <code>ServletContext.getResource()</code> or
-     * <code>ServletContext.getResourceAsStream()</code> must start with &quot;/&quot;. If <code>false</code>, code like
-     * <code>getResource("myfolder/myresource.txt")</code> will work as Tomcat will prepend &quot;/&quot; to the
-     * provided path. If <code>org.apache.catalina.STRICT_SERVLET_COMPLIANCE</code> is set to <code>true</code>, the
-     * default of this setting will be <code>true</code>, else the default value will be <code>false</code>.
+     * 如果为true，传递给ServletContext.getResource()或ServletContext.getResourceAsStream()的路径
+     * 必须以"/"开头
+     * 如果为false，像getResource("myfolder/myresource.txt")这样的代码将起作用
+     * 因为Tomcat会在提供的路径前加上"/"
+     * 如果org.apache.catalina.STRICT_SERVLET_COMPLIANCE设置为true
+     * 此设置的默认值将为true，否则默认值为false
      *
-     * @return the flag value
+     * @return 标志值
      */
     boolean getContextGetResourceRequiresSlash();
 
 
     /**
-     * Allow using <code>ServletContext.getResource()</code> or <code>ServletContext.getResourceAsStream()</code>
-     * without a leading &quot;/&quot;.
+     * 允许使用不带前导"/"的ServletContext.getResource()或ServletContext.getResourceAsStream()
      *
-     * @param contextGetResourceRequiresSlash the new flag value
+     * @param contextGetResourceRequiresSlash 新的标志值
      */
     void setContextGetResourceRequiresSlash(boolean contextGetResourceRequiresSlash);
 
 
     /**
-     * If this is <code>true</code> then any wrapped request or response object passed to an application dispatcher will
-     * be checked to ensure that it has wrapped the original request or response. If
-     * <code>org.apache.catalina.STRICT_SERVLET_COMPLIANCE</code> is set to <code>true</code>, the default of this
-     * setting will be <code>true</code>, else the default value will be <code>false</code>.
+     * 如果为true，传递给应用程序调度程序的任何包装的请求或响应对象
+     * 将被检查以确保它包装了原始请求或响应
+     * 如果org.apache.catalina.STRICT_SERVLET_COMPLIANCE设置为true
+     * 此设置的默认值将为true，否则默认值为false
      *
-     * @return the flag value
+     * @return 标志值
      */
     boolean getDispatcherWrapsSameObject();
 
 
     /**
-     * Allow disabling the object wrap check in the request dispatcher.
+     * 允许禁用请求调度程序中的对象包装检查
      *
-     * @param dispatcherWrapsSameObject the new flag value
+     * @param dispatcherWrapsSameObject 新的标志值
      */
     void setDispatcherWrapsSameObject(boolean dispatcherWrapsSameObject);
 
 
     /**
-     * If this is <code>true</code>, then following a forward the response will be unwrapped to suspend the Catalina
-     * response instead of simply closing the top level response. The default value is <code>false</code>.
+     * 如果为true，转发后响应将被解包以暂停Catalina响应
+     * 而不是简单地关闭顶级响应
+     * 默认值为false
      *
-     * @return the flag value
+     * @return 标志值
      */
     boolean getSuspendWrappedResponseAfterForward();
 
 
     /**
-     * Allows unwrapping the response object to suspend the response following a forward.
+     * 允许解包响应对象以在转发后暂停响应
      *
-     * @param suspendWrappedResponseAfterForward the new flag value
+     * @param suspendWrappedResponseAfterForward 新的标志值
      */
     void setSuspendWrappedResponseAfterForward(boolean suspendWrappedResponseAfterForward);
 
 
     /**
-     * Find configuration file with the specified path, first looking into the webapp resources, then delegating to
-     * <code>ConfigFileLoader.getSource().getResource</code>. The <code>WEBAPP_PROTOCOL</code> constant prefix is used
-     * to denote webapp resources.
+     * 查找具有指定路径的配置文件
+     * 首先查看Web应用资源，然后委托给ConfigFileLoader.getSource().getResource
+     * WEBAPP_PROTOCOL常量前缀用于表示Web应用资源
      *
-     * @param name The resource name
-     *
-     * @return the resource
-     *
-     * @throws IOException if an error occurs or if the resource does not exist
+     * @param name 资源名称
+     * @return 资源
+     * @throws IOException 如果发生错误或资源不存在
      */
     default Resource findConfigFileResource(String name) throws IOException {
         if (name.startsWith(WEBAPP_PROTOCOL)) {
@@ -1873,31 +1964,31 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * @return <code>true</code> if the resources archive lookup will use a bloom filter.
+     * 返回true如果资源归档查找将使用布隆过滤器
      *
-     * @deprecated This method will be removed in Tomcat 11 onwards. Use
-     *                 {@link WebResourceRoot#getArchiveIndexStrategy()}
+     * @deprecated 此方法将在Tomcat 11及以后版本中删除
+     * 使用WebResourceRoot.getArchiveIndexStrategy()
      */
     @Deprecated
     boolean getUseBloomFilterForArchives();
 
+
     /**
-     * Set bloom filter flag value.
+     * 设置布隆过滤器标志值
      *
-     * @param useBloomFilterForArchives The new fast class path scan flag
-     *
-     * @deprecated This method will be removed in Tomcat 11 onwards Use
-     *                 {@link WebResourceRoot#setArchiveIndexStrategy(String)}
+     * @param useBloomFilterForArchives 新的快速类路径扫描标志
+     * @deprecated 此方法将在Tomcat 11及以后版本中删除
+     * 使用WebResourceRoot.setArchiveIndexStrategy(String)
      */
     @Deprecated
     void setUseBloomFilterForArchives(boolean useBloomFilterForArchives);
 
 
     /**
-     * Obtain the current configuration for the handling of encoded reverse solidus (%5c - \) characters in paths used
-     * to obtain {@link RequestDispatcher} instances for this {@link Context}.
+     * 获取此Context中用于获取RequestDispatcher实例的路径中
+     * 编码反向斜杠(%5c - \)字符的当前处理配置
      *
-     * @return Obtain the current configuration for the handling of encoded reverse solidus characters
+     * @return 编码反向斜杠字符的当前处理配置
      */
     default String getEncodedReverseSolidusHandling() {
         return EncodedSolidusHandling.DECODE.getValue();
@@ -1905,10 +1996,10 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Configure the handling for encoded reverse solidus (%5c - \) characters in paths used to obtain
-     * {@link RequestDispatcher} instances for this {@link Context}.
+     * 配置此Context中用于获取RequestDispatcher实例的路径中
+     * 编码反向斜杠(%5c - \)字符的处理
      *
-     * @param encodedReverseSolidusHandling One of the values of {@link EncodedSolidusHandling}
+     * @param encodedReverseSolidusHandling EncodedSolidusHandling的值之一
      */
     default void setEncodedReverseSolidusHandling(String encodedReverseSolidusHandling) {
         throw new UnsupportedOperationException();
@@ -1916,10 +2007,10 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Obtain the current configuration for the handling of encoded reverse solidus (%5c - \) characters in paths used
-     * to obtain {@link RequestDispatcher} instances for this {@link Context}.
+     * 获取此Context中用于获取RequestDispatcher实例的路径中
+     * 编码反向斜杠(%5c - \)字符的当前处理配置
      *
-     * @return Obtain the current configuration for the handling of encoded reverse solidus characters
+     * @return 编码反向斜杠字符的当前处理配置
      */
     default EncodedSolidusHandling getEncodedReverseSolidusHandlingEnum() {
         return EncodedSolidusHandling.DECODE;
@@ -1927,10 +2018,10 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Obtain the current configuration for the handling of encoded solidus (%2f - /) characters in paths used to obtain
-     * {@link RequestDispatcher} instances for this {@link Context}.
+     * 获取此Context中用于获取RequestDispatcher实例的路径中
+     * 编码斜杠(%2f - /)字符的当前处理配置
      *
-     * @return Obtain the current configuration for the handling of encoded solidus characters
+     * @return 编码斜杠字符的当前处理配置
      */
     default String getEncodedSolidusHandling() {
         return EncodedSolidusHandling.DECODE.getValue();
@@ -1938,10 +2029,10 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Configure the handling for encoded solidus (%2f - /) characters in paths used to obtain {@link RequestDispatcher}
-     * instances for this {@link Context}.
+     * 配置此Context中用于获取RequestDispatcher实例的路径中
+     * 编码斜杠(%2f - /)字符的处理
      *
-     * @param encodedSolidusHandling One of the values of {@link EncodedSolidusHandling}
+     * @param encodedSolidusHandling EncodedSolidusHandling的值之一
      */
     default void setEncodedSolidusHandling(String encodedSolidusHandling) {
         throw new UnsupportedOperationException();
@@ -1949,10 +2040,10 @@ public interface Context extends Container, ContextBind {
 
 
     /**
-     * Obtain the current configuration for the handling of encoded solidus (%2f - /) characters in paths used to obtain
-     * {@link RequestDispatcher} instances for this {@link Context}.
+     * 获取此Context中用于获取RequestDispatcher实例的路径中
+     * 编码斜杠(%2f - /)字符的当前处理配置
      *
-     * @return Obtain the current configuration for the handling of encoded solidus characters
+     * @return 编码斜杠字符的当前处理配置
      */
     default EncodedSolidusHandling getEncodedSolidusHandlingEnum() {
         return EncodedSolidusHandling.DECODE;

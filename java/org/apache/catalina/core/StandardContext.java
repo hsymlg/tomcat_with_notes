@@ -139,11 +139,8 @@ import org.apache.tomcat.util.security.PrivilegedSetTccl;
 import org.apache.tomcat.util.threads.ScheduledThreadPoolExecutor;
 
 /**
- * Standard implementation of the <b>Context</b> interface. Each child container must be a Wrapper implementation to
- * process the requests directed to a particular servlet.
- *
- * @author Craig R. McClanahan
- * @author Remy Maucherat
+ * StandardContext 是 Tomcat 中 Web 应用的 "容器"，负责封装应用的所有组件并管理其生命周期。
+ * 它实现了 Servlet 规范的核心功能，包括请求处理、会话管理、安全控制等，并通过模块化设计（如 Pipeline、Loader、Manager）支持灵活扩展。
  */
 public class StandardContext extends ContainerBase implements Context, NotificationEmitter {
 
@@ -3950,28 +3947,30 @@ public class StandardContext extends ContainerBase implements Context, Notificat
 
 
     /**
-     * Configure the set of instantiated application event listeners for this Context.
-     *
-     * @return <code>true</code> if all listeners wre initialized successfully, or <code>false</code> otherwise.
+     * 配置并初始化此 Context 的应用程序事件监听器集合
+     * @return true 如果所有监听器初始化成功，否则 false
      */
     public boolean listenerStart() {
-
         if (log.isTraceEnabled()) {
             log.trace("Configuring application event listeners");
         }
 
-        // Instantiate the required listeners
+        // 获取在部署描述符或注解中定义的监听器类名数组
         String[] listeners = findApplicationListeners();
+        // 用于存储实例化后的监听器对象
         Object[] results = new Object[listeners.length];
         boolean ok = true;
+
+        // 实例化每个监听器类
         for (int i = 0; i < results.length; i++) {
             if (getLogger().isTraceEnabled()) {
                 getLogger().trace(" Configuring event listener class '" + listeners[i] + "'");
             }
             try {
-                String listener = listeners[i];
-                results[i] = getInstanceManager().newInstance(listener);
+                // 使用实例管理器创建监听器实例
+                results[i] = getInstanceManager().newInstance(listeners[i]);
             } catch (Throwable t) {
+                // 处理实例化异常，记录错误并标记启动失败
                 Throwable throwable = ExceptionUtils.unwrapInvocationTargetException(t);
                 ExceptionUtils.handleThrowable(throwable);
                 getLogger().error(sm.getString("standardContext.applicationListener", listeners[i]), throwable);
@@ -3983,27 +3982,27 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             return false;
         }
 
-        // Sort listeners in two arrays
+        // 将监听器分类到事件监听器和生命周期监听器数组
         List<Object> eventListeners = new ArrayList<>();
         List<Object> lifecycleListeners = new ArrayList<>();
         for (Object result : results) {
+            // 添加事件监听器（处理请求、会话等事件）
             if ((result instanceof ServletContextAttributeListener) ||
-                    (result instanceof ServletRequestAttributeListener) || (result instanceof ServletRequestListener) ||
-                    (result instanceof HttpSessionIdListener) || (result instanceof HttpSessionAttributeListener)) {
+                (result instanceof ServletRequestAttributeListener) || (result instanceof ServletRequestListener) ||
+                (result instanceof HttpSessionIdListener) || (result instanceof HttpSessionAttributeListener)) {
                 eventListeners.add(result);
             }
+            // 添加生命周期监听器（处理应用上下文和会话的生命周期）
             if ((result instanceof ServletContextListener) || (result instanceof HttpSessionListener)) {
                 lifecycleListeners.add(result);
             }
         }
 
-        // Listener instances may have been added directly to this Context by
-        // ServletContextInitializers and other code via the pluggability APIs.
-        // Put them these listeners after the ones defined in web.xml and/or
-        // annotations then overwrite the list of instances with the new, full
-        // list.
+        // 添加通过插件API直接添加的监听器实例
         eventListeners.addAll(Arrays.asList(getApplicationEventListeners()));
         setApplicationEventListeners(eventListeners.toArray());
+
+        // 处理生命周期监听器，标记需要限制访问的监听器
         for (Object lifecycleListener : getApplicationLifecycleListeners()) {
             lifecycleListeners.add(lifecycleListener);
             if (lifecycleListener instanceof ServletContextListener) {
@@ -4012,14 +4011,13 @@ public class StandardContext extends ContainerBase implements Context, Notificat
         }
         setApplicationLifecycleListeners(lifecycleListeners.toArray());
 
-        // Send application start events
-
         if (getLogger().isTraceEnabled()) {
             getLogger().trace("Sending application start events");
         }
 
-        // Ensure context is not null
+        // 确保ServletContext已初始化
         getServletContext();
+        // 禁止添加新的ServletContextListener
         context.setNewServletContextListenerAllowed(false);
 
         Object[] instances = getApplicationLifecycleListeners();
@@ -4027,26 +4025,34 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             return ok;
         }
 
+        // 创建ServletContext事件对象
         ServletContextEvent event = new ServletContextEvent(getServletContext());
         ServletContextEvent tldEvent = null;
+        // 为需要限制访问的监听器创建特殊的ServletContext包装
         if (!noPluggabilityListeners.isEmpty()) {
             noPluggabilityServletContext = new NoPluggabilityServletContext(getServletContext());
             tldEvent = new ServletContextEvent(noPluggabilityServletContext);
         }
+
+        // 触发每个生命周期监听器的contextInitialized方法
         for (Object instance : instances) {
             if (!(instance instanceof ServletContextListener)) {
                 continue;
             }
             ServletContextListener listener = (ServletContextListener) instance;
             try {
+                // 触发容器事件 - 初始化前
                 fireContainerEvent("beforeContextInitialized", listener);
+                // 根据监听器类型选择使用普通或受限的ServletContext
                 if (noPluggabilityListeners.contains(listener)) {
                     listener.contextInitialized(tldEvent);
                 } else {
                     listener.contextInitialized(event);
                 }
+                // 触发容器事件 - 初始化后
                 fireContainerEvent("afterContextInitialized", listener);
             } catch (Throwable t) {
+                // 处理监听器初始化异常
                 ExceptionUtils.handleThrowable(t);
                 fireContainerEvent("afterContextInitialized", listener);
                 getLogger().error(sm.getString("standardContext.listenerStart", instance.getClass().getName()), t);
@@ -4054,17 +4060,14 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             }
         }
         return ok;
-
     }
 
 
     /**
-     * Send an application stop event to all interested listeners.
-     *
-     * @return <code>true</code> if all events were sent successfully, or <code>false</code> otherwise.
+     * 向所有感兴趣的监听器发送应用程序停止事件
+     * @return true 如果所有事件发送成功，否则 false
      */
     public boolean listenerStop() {
-
         if (log.isTraceEnabled()) {
             log.trace("Sending application stop events");
         }
@@ -4072,11 +4075,15 @@ public class StandardContext extends ContainerBase implements Context, Notificat
         boolean ok = true;
         Object[] listeners = getApplicationLifecycleListeners();
         if (listeners != null && listeners.length > 0) {
+            // 创建ServletContext事件对象
             ServletContextEvent event = new ServletContextEvent(getServletContext());
             ServletContextEvent tldEvent = null;
+            // 如果存在受限监听器，使用受限的ServletContext
             if (noPluggabilityServletContext != null) {
                 tldEvent = new ServletContextEvent(noPluggabilityServletContext);
             }
+
+            // 逆序处理监听器（确保按注册顺序的反向调用）
             for (int i = 0; i < listeners.length; i++) {
                 int j = (listeners.length - 1) - i;
                 if (listeners[j] == null) {
@@ -4085,36 +4092,42 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 if (listeners[j] instanceof ServletContextListener) {
                     ServletContextListener listener = (ServletContextListener) listeners[j];
                     try {
+                        // 触发容器事件 - 销毁前
                         fireContainerEvent("beforeContextDestroyed", listener);
+                        // 根据监听器类型选择使用普通或受限的ServletContext
                         if (noPluggabilityListeners.contains(listener)) {
                             listener.contextDestroyed(tldEvent);
                         } else {
                             listener.contextDestroyed(event);
                         }
+                        // 触发容器事件 - 销毁后
                         fireContainerEvent("afterContextDestroyed", listener);
                     } catch (Throwable t) {
+                        // 处理监听器销毁异常
                         ExceptionUtils.handleThrowable(t);
                         fireContainerEvent("afterContextDestroyed", listener);
                         getLogger().error(
-                                sm.getString("standardContext.listenerStop", listeners[j].getClass().getName()), t);
+                            sm.getString("standardContext.listenerStop", listeners[j].getClass().getName()), t);
                         ok = false;
                     }
                 }
                 try {
+                    // 销毁监听器实例
                     if (getInstanceManager() != null) {
                         getInstanceManager().destroyInstance(listeners[j]);
                     }
                 } catch (Throwable t) {
+                    // 处理实例销毁异常
                     Throwable throwable = ExceptionUtils.unwrapInvocationTargetException(t);
                     ExceptionUtils.handleThrowable(throwable);
                     getLogger().error(sm.getString("standardContext.listenerStop", listeners[j].getClass().getName()),
-                            throwable);
+                        throwable);
                     ok = false;
                 }
             }
         }
 
-        // Annotation processing
+        // 销毁事件监听器实例
         listeners = getApplicationEventListeners();
         if (listeners != null) {
             for (int i = 0; i < listeners.length; i++) {
@@ -4127,18 +4140,19 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                         getInstanceManager().destroyInstance(listeners[j]);
                     }
                 } catch (Throwable t) {
+                    // 处理实例销毁异常
                     Throwable throwable = ExceptionUtils.unwrapInvocationTargetException(t);
                     ExceptionUtils.handleThrowable(throwable);
                     getLogger().error(sm.getString("standardContext.listenerStop", listeners[j].getClass().getName()),
-                            throwable);
+                        throwable);
                     ok = false;
                 }
             }
         }
 
+        // 清空监听器引用
         setApplicationEventListeners(null);
         setApplicationLifecycleListeners(null);
-
         noPluggabilityServletContext = null;
         noPluggabilityListeners.clear();
 
@@ -4147,35 +4161,32 @@ public class StandardContext extends ContainerBase implements Context, Notificat
 
 
     /**
-     * Allocate resources, including proxy.
-     *
-     * @throws LifecycleException if a start error occurs
+     * 分配资源，包括代理
+     * @throws LifecycleException 如果启动过程中发生错误
      */
     public void resourcesStart() throws LifecycleException {
-
-        // Check current status in case resources were added that had already
-        // been started
+        // 检查资源状态，若未启动则启动资源处理
         if (!resources.getState().isAvailable()) {
             resources.start();
         }
 
+        // 对于Servlet 3.0及以上版本，处理WEB-INF/classes中的资源
         if (effectiveMajorVersion >= 3 && addWebinfClassesResources) {
             WebResource webinfClassesResource = resources.getResource("/WEB-INF/classes/META-INF/resources");
             if (webinfClassesResource.isDirectory()) {
+                // 创建Web资源集，将类路径中的资源映射到Web应用
                 getResources().createWebResourceSet(WebResourceRoot.ResourceSetType.RESOURCE_JAR, "/",
-                        webinfClassesResource.getURL(), "/");
+                    webinfClassesResource.getURL(), "/");
             }
         }
     }
 
 
     /**
-     * Deallocate resources and destroy proxy.
-     *
-     * @return <code>true</code> if no error occurred
+     * 释放资源并销毁代理
+     * @return true 如果未发生错误
      */
     public boolean resourcesStop() {
-
         boolean ok = true;
 
         try {
@@ -4183,6 +4194,7 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 resources.stop();
             }
         } catch (Throwable t) {
+            // 处理资源停止异常
             ExceptionUtils.handleThrowable(t);
             log.error(sm.getString("standardContext.resourcesStop"), t);
             ok = false;
@@ -4193,40 +4205,37 @@ public class StandardContext extends ContainerBase implements Context, Notificat
 
 
     /**
-     * Load and initialize all servlets marked "load on startup" in the web application deployment descriptor.
-     *
-     * @param children Array of wrappers for all currently defined servlets (including those not declared load on
-     *                     startup)
-     *
-     * @return <code>true</code> if load on startup was considered successful
+     * 加载并初始化Web应用部署描述符中标记为"load on startup"的所有Servlet
+     * @param children 所有已定义的Servlet包装器数组
+     * @return true 如果加载启动被认为成功
      */
     public boolean loadOnStartup(Container[] children) {
-
-        // Collect "load on startup" servlets that need to be initialized
-        TreeMap<Integer,ArrayList<Wrapper>> map = new TreeMap<>();
+        // 收集需要初始化的"load on startup" Servlet
+        TreeMap<Integer, ArrayList<Wrapper>> map = new TreeMap<>();
         for (Container child : children) {
             Wrapper wrapper = (Wrapper) child;
             int loadOnStartup = wrapper.getLoadOnStartup();
+            // 只处理loadOnStartup值大于等于0的Servlet
             if (loadOnStartup < 0) {
                 continue;
             }
             Integer key = Integer.valueOf(loadOnStartup);
+            // 按loadOnStartup值分组存储Wrapper
             map.computeIfAbsent(key, k -> new ArrayList<>()).add(wrapper);
         }
 
-        // Load the collected "load on startup" servlets
+        // 按loadOnStartup顺序加载Servlet
         for (ArrayList<Wrapper> list : map.values()) {
             for (Wrapper wrapper : list) {
                 try {
+                    // 加载并初始化Servlet
                     wrapper.load();
                 } catch (ServletException e) {
+                    // 处理Servlet加载异常
                     getLogger().error(
-                            sm.getString("standardContext.loadOnStartup.loadException", getName(), wrapper.getName()),
-                            StandardWrapper.getRootCause(e));
-                    // NOTE: load errors (including a servlet that throws
-                    // UnavailableException from the init() method) are NOT
-                    // fatal to application startup
-                    // unless failCtxIfServletStartFails="true" is specified
+                        sm.getString("standardContext.loadOnStartup.loadException", getName(), wrapper.getName()),
+                        StandardWrapper.getRootCause(e));
+                    // 除非配置了failCtxIfServletStartFails，否则加载错误不影响应用启动
                     if (getComputedFailCtxIfServletStartFails()) {
                         return false;
                     }
@@ -4234,43 +4243,44 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             }
         }
         return true;
-
     }
 
 
+    /**
+     * 内部启动方法，实现Context的启动逻辑
+     * @throws LifecycleException 如果启动过程中发生生命周期异常
+     */
     @Override
     protected void startInternal() throws LifecycleException {
-
         if (log.isTraceEnabled()) {
             log.trace("Starting " + getBaseName());
         }
 
-        // Send j2ee.state.starting notification
+        // 发送J2EE状态通知 - 应用开始启动
         if (this.getObjectName() != null) {
             Notification notification =
-                    new Notification("j2ee.state.starting", this.getObjectName(), sequenceNumber.getAndIncrement());
+                new Notification("j2ee.state.starting", this.getObjectName(), sequenceNumber.getAndIncrement());
             broadcaster.sendNotification(notification);
         }
 
         setConfigured(false);
         boolean ok = true;
 
-        // Currently this is effectively a NO-OP but needs to be called to
-        // ensure the NamingResources follows the correct lifecycle
+        // 启动命名资源（确保遵循正确的生命周期）
         if (namingResources != null) {
             namingResources.start();
         }
 
-        // Post work directory
+        // 配置工作目录并设置ServletContext属性
         postWorkDirectory();
 
-        // Add missing components as necessary
-        if (getResources() == null) { // (1) Required by Loader
+        // 添加缺失的组件（如资源处理器）
+        if (getResources() == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Configuring default Resources");
             }
-
             try {
+                // 创建标准资源根目录
                 setResources(new StandardRoot(this));
             } catch (IllegalArgumentException e) {
                 log.error(sm.getString("standardContext.resourcesInit"), e);
@@ -4281,26 +4291,28 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             resourcesStart();
         }
 
+        // 配置类加载器
         if (getLoader() == null) {
             WebappLoader webappLoader = new WebappLoader();
             webappLoader.setDelegate(getDelegate());
             setLoader(webappLoader);
         }
 
-        // An explicit cookie processor hasn't been specified; use the default
+        // 配置Cookie处理器（如果未显式指定）
         if (cookieProcessor == null) {
             cookieProcessor = new Rfc6265CookieProcessor();
         }
 
-        // Initialize character set mapper
+        // 初始化字符集映射器
         getCharsetMapper();
 
-        // Reading the "catalina.useNaming" environment variable
+        // 读取系统属性，确定是否启用JNDI
         String useNamingProperty = System.getProperty("catalina.useNaming");
         if ((useNamingProperty != null) && (useNamingProperty.equals("false"))) {
             useNaming = false;
         }
 
+        // 配置JNDI上下文监听器
         if (ok && isUseNaming()) {
             if (getNamingContextListener() == null) {
                 NamingContextListener ncl = new NamingContextListener();
@@ -4311,25 +4323,23 @@ public class StandardContext extends ContainerBase implements Context, Notificat
             }
         }
 
-        // Standard container startup
+        // 标准容器启动流程
         if (log.isTraceEnabled()) {
             log.trace("Processing standard container startup");
         }
 
-
-        // Binding thread
+        // 绑定线程上下文类加载器
         ClassLoader oldCCL = bindThread();
 
         try {
             if (ok) {
-                // Start our subordinate components, if any
+                // 启动子组件（如类加载器）
                 Loader loader = getLoader();
                 if (loader instanceof Lifecycle) {
                     ((Lifecycle) loader).start();
                 }
 
-                // since the loader just started, the webapp classloader is now
-                // created.
+                // 配置类加载器的内存泄漏检查参数
                 if (loader.getClassLoader() instanceof WebappClassLoaderBase) {
                     WebappClassLoaderBase cl = (WebappClassLoaderBase) loader.getClassLoader();
                     cl.setClearReferencesRmiTargets(getClearReferencesRmiTargets());
@@ -4342,30 +4352,25 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                     cl.setNotFoundClassResourceCacheSize(getNotFoundClassResourceCacheSize());
                 }
 
-                // By calling unbindThread and bindThread in a row, we set up the
-                // current Thread CCL to be the webapp classloader
+                // 重新绑定线程上下文类加载器为Web应用类加载器
                 unbindThread(oldCCL);
                 oldCCL = bindThread();
 
-                // Initialize logger again. Other components might have used it
-                // too early, so it should be reset.
+                // 初始化日志记录器
                 logger = null;
                 getLogger();
 
+                // 启动Realm（安全领域）
                 Realm realm = getRealmInternal();
                 if (null != realm) {
                     if (realm instanceof Lifecycle) {
                         ((Lifecycle) realm).start();
                     }
-
-                    // Place the CredentialHandler into the ServletContext so
-                    // applications can have access to it. Wrap it in a "safe"
-                    // handler so application's can't modify it.
+                    // 将CredentialHandler放入ServletContext
                     CredentialHandler safeHandler = new CredentialHandler() {
                         @Override
                         public boolean matches(String inputCredentials, String storedCredentials) {
-                            return getRealmInternal().getCredentialHandler().matches(inputCredentials,
-                                    storedCredentials);
+                            return getRealmInternal().getCredentialHandler().matches(inputCredentials, storedCredentials);
                         }
 
                         @Override
@@ -4376,30 +4381,30 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                     context.setAttribute(Globals.CREDENTIAL_HANDLER, safeHandler);
                 }
 
-                // Notify our interested LifecycleListeners
+                // 触发容器生命周期事件
                 fireLifecycleEvent(CONFIGURE_START_EVENT, null);
 
-                // Start our child containers, if not already started
+                // 启动所有子容器（如Servlet包装器）
                 for (Container child : findChildren()) {
                     if (!child.getState().isAvailable()) {
                         child.start();
                     }
                 }
 
-                // Start the Valves in our pipeline (including the basic),
-                // if any
+                // 启动管道中的Valve
                 if (pipeline instanceof Lifecycle) {
                     ((Lifecycle) pipeline).start();
                 }
 
-                // Acquire clustered manager
+                // 获取或创建会话管理器
                 Manager contextManager = null;
                 Manager manager = getManager();
                 if (manager == null) {
                     if (log.isDebugEnabled()) {
                         log.debug(sm.getString("standardContext.cluster.noManager",
-                                Boolean.valueOf((getCluster() != null)), Boolean.valueOf(distributable)));
+                            Boolean.valueOf((getCluster() != null)), Boolean.valueOf(distributable)));
                     }
+                    // 分布式环境下创建集群管理器
                     if ((getCluster() != null) && distributable) {
                         try {
                             contextManager = getCluster().createManager(getName());
@@ -4412,7 +4417,7 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                     }
                 }
 
-                // Configure default manager if none was specified
+                // 配置会话管理器
                 if (contextManager != null) {
                     if (log.isDebugEnabled()) {
                         log.debug(sm.getString("standardContext.manager", contextManager.getClass().getName()));
@@ -4420,46 +4425,45 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                     setManager(contextManager);
                 }
 
+                // 向集群注册管理器（如果是分布式环境）
                 if (manager != null && (getCluster() != null) && distributable) {
-                    // let the cluster know that there is a context that is distributable
-                    // and that it has its own manager
                     getCluster().registerManager(manager);
                 }
             }
 
+            // 检查配置是否完成
             if (!getConfigured()) {
                 log.error(sm.getString("standardContext.configurationFail"));
                 ok = false;
             }
 
-            // We put the resources into the servlet context
+            // 设置ServletContext属性
             if (ok) {
                 getServletContext().setAttribute(Globals.RESOURCES_ATTR, getResources());
 
+                // 初始化实例管理器
                 if (getInstanceManager() == null) {
                     setInstanceManager(createInstanceManager());
                 }
                 getServletContext().setAttribute(InstanceManager.class.getName(), getInstanceManager());
                 InstanceManagerBindings.bind(getLoader().getClassLoader(), getInstanceManager());
 
-                // Create context attributes that will be required
+                // 设置其他必要的上下文属性
                 getServletContext().setAttribute(JarScanner.class.getName(), getJarScanner());
-
-                // Make the version info available
                 getServletContext().setAttribute(Globals.WEBAPP_VERSION, getWebappVersion());
 
-                // Make the utility executor available
+                // 提供工具执行器
                 if (!Globals.IS_SECURITY_ENABLED) {
                     getServletContext().setAttribute(ScheduledThreadPoolExecutor.class.getName(),
-                            Container.getService(this).getServer().getUtilityExecutor());
+                        Container.getService(this).getServer().getUtilityExecutor());
                 }
             }
 
-            // Set up the context init params
+            // 合并上下文初始化参数
             mergeParameters();
 
-            // Call ServletContainerInitializers
-            for (Map.Entry<ServletContainerInitializer,Set<Class<?>>> entry : initializers.entrySet()) {
+            // 调用ServletContainerInitializers
+            for (Map.Entry<ServletContainerInitializer, Set<Class<?>>> entry : initializers.entrySet()) {
                 try {
                     entry.getKey().onStartup(entry.getValue(), getServletContext());
                 } catch (ServletException e) {
@@ -4469,7 +4473,7 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 }
             }
 
-            // Configure and call application event listeners
+            // 配置并调用应用事件监听器
             if (ok) {
                 if (!listenerStart()) {
                     log.error(sm.getString("standardContext.listenerFail"));
@@ -4477,15 +4481,13 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 }
             }
 
-            // Check constraints for uncovered HTTP methods
-            // Needs to be after SCIs and listeners as they may programmatically
-            // change constraints
+            // 检查未覆盖的HTTP方法约束
             if (ok) {
                 checkConstraintsForUncoveredMethods(findConstraints());
             }
 
+            // 启动会话管理器
             try {
-                // Start manager
                 Manager manager = getManager();
                 if (manager instanceof Lifecycle) {
                     ((Lifecycle) manager).start();
@@ -4495,7 +4497,7 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 ok = false;
             }
 
-            // Configure and call application filters
+            // 配置并调用应用过滤器
             if (ok) {
                 if (!filterStart()) {
                     log.error(sm.getString("standardContext.filterFail"));
@@ -4503,7 +4505,7 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 }
             }
 
-            // Load and initialize all "load on startup" servlets
+            // 加载并初始化"load on startup" Servlet
             if (ok) {
                 if (!loadOnStartup(findChildren())) {
                     log.error(sm.getString("standardContext.servletFail"));
@@ -4511,14 +4513,14 @@ public class StandardContext extends ContainerBase implements Context, Notificat
                 }
             }
 
-            // Start ContainerBackgroundProcessor thread
+            // 启动容器后台处理线程
             super.threadStart();
         } finally {
-            // Unbinding thread
+            // 解除线程绑定，恢复原始类加载器
             unbindThread(oldCCL);
         }
 
-        // Set available status depending upon startup success
+        // 设置启动状态
         if (ok) {
             if (log.isTraceEnabled()) {
                 log.trace("Starting completed");
@@ -4529,26 +4531,23 @@ public class StandardContext extends ContainerBase implements Context, Notificat
 
         startTime = System.currentTimeMillis();
 
-        // Send j2ee.state.running notification
+        // 发送J2EE状态通知 - 应用已运行
         if (ok && (this.getObjectName() != null)) {
             Notification notification =
-                    new Notification("j2ee.state.running", this.getObjectName(), sequenceNumber.getAndIncrement());
+                new Notification("j2ee.state.running", this.getObjectName(), sequenceNumber.getAndIncrement());
             broadcaster.sendNotification(notification);
         }
 
-        // The WebResources implementation caches references to JAR files. On
-        // some platforms these references may lock the JAR files. Since web
-        // application start is likely to have read from lots of JARs, trigger
-        // a clean-up now.
+        // 触发资源垃圾回收，释放JAR文件锁
         getResources().gc();
 
-        // Reinitializing if something went wrong
+        // 设置上下文状态
         if (!ok) {
             setState(LifecycleState.FAILED);
-            // Send j2ee.object.failed notification
+            // 发送J2EE对象失败通知
             if (this.getObjectName() != null) {
                 Notification notification =
-                        new Notification("j2ee.object.failed", this.getObjectName(), sequenceNumber.getAndIncrement());
+                    new Notification("j2ee.object.failed", this.getObjectName(), sequenceNumber.getAndIncrement());
                 broadcaster.sendNotification(notification);
             }
         } else {
