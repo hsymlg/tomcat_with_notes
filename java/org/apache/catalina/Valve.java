@@ -20,6 +20,9 @@ import org.apache.catalina.connector.Response;
  * - 多个Valve组成Pipeline（管道），形成责任链
  * - 每个Valve可以处理请求、修改请求/响应或传递给下一个Valve
  *
+ * 核心方法：invoke(Request request, Response response)，用于传递请求到下一个节点
+ * 关键实现：StandardEngineValve、StandardHostValve、StandardContextValve等
+ *
  * 典型应用场景：
  * - 日志记录（AccessLogValve）
  * - 安全认证（RemoteAddrValve）

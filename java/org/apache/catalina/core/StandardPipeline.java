@@ -29,6 +29,25 @@ import org.apache.tomcat.util.res.StringManager;
 /**
  * Pipeline接口的标准实现类，负责管理Valve的执行顺序
  *
+ * 每个容器（如 Host）有独立的Pipeline-Valve链
+ * 请求会按容器层级依次经过各层责任链
+ * 浏览器请求 → Engine Pipeline → Host Pipeline → Context Pipeline → Wrapper Pipeline → Servlet
+ *
+ * 责任链的典型应用场景
+ * 请求预处理：如AccessLogValve记录访问日志，SecurityValve进行权限校验
+ * 会话管理：如SessionIdGeneratorValve生成会话 ID，SessionHandlerValve管理会话状态
+ * 容器特性实现：
+ * - StandardEngineValve：处理 Engine 容器的请求分发
+ * - StandardHostValve：处理虚拟主机（Host）的请求路由
+ * - StandardContextValve：处理 Web 应用（Context）的请求映射
+ * - StandardWrapperValve：最终调用 Servlet 的service()方法
+ *
+ * 当请求到达时，责任链按以下顺序处理：
+ * 1.请求首先进入first阀门（链头）
+ * 2.每个Valve处理完逻辑后，通过getNext().invoke(request, response)传递给下一个节点
+ * 3.直到到达basic阀门（链尾），完成最终处理
+ * 4.响应按相反顺序回传，每个阀门可补充响应处理逻辑
+ *
  * 实现特点：
  * 1. 基于责任链模式实现Valve的顺序调用
  * 2. 支持生命周期管理（Lifecycle接口）
@@ -59,6 +78,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
      * @param container 关联的容器对象
      */
     public StandardPipeline(Container container) {
+        //调用的是父类的无参构造函数。具体来说，StandardPipeline继承自LifecycleBase类，因此这行代码调用的是LifecycleBase类的构造函数。
         super();
         setContainer(container);
     }
@@ -209,98 +229,131 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
     }
 
     /**
-     * 设置基础Valve
-     * 实现逻辑：
-     * 1. 停止旧Valve（如果有）
-     * 2. 关联新Valve到Container
-     * 3. 更新Valve链表关系
-     * 4. 启动新Valve（如果已启动）
+     * 设置管道的基础Valve（Pipeline的最后一个执行Valve）
+     *
+     * 实现逻辑说明：
+     * 1. 状态检查与旧Valve处理：若存在旧基础Valve，先停止其生命周期并解除与容器的关联
+     * 2. 新Valve初始化：将新Valve关联到容器并启动（若管道已启动）
+     * 3. 链表结构更新：修改Valve链表中指向旧Valve的引用，指向新Valve
+     * 4. 最终状态设置：将新Valve设为基础Valve
+     *
+     * @param valve 要设置的新基础Valve，null表示移除基础Valve
      */
     @Override
     public void setBasic(Valve valve) {
+        // 获取当前基础Valve
         Valve oldBasic = this.basic;
+        // 若新旧Valve相同，直接返回（避免无效操作）
         if (oldBasic == valve) {
             return;
         }
 
-        // 停止旧Valve
+        // ------------------------- 处理旧基础Valve -------------------------
         if (oldBasic != null) {
+            // 若管道状态可用且旧Valve支持生命周期管理，停止其生命周期
             if (getState().isAvailable() && (oldBasic instanceof Lifecycle)) {
                 try {
                     ((Lifecycle) oldBasic).stop();
                 } catch (LifecycleException e) {
+                    // 记录停止旧Valve时的异常
                     log.error(sm.getString("standardPipeline.basic.stop"), e);
                 }
             }
+            // 若旧Valve实现了Contained接口，解除其与容器的关联
             if (oldBasic instanceof Contained) {
                 ((Contained) oldBasic).setContainer(null);
             }
         }
 
-        // 启动新Valve
+        // ------------------------- 处理新基础Valve -------------------------
+        // 若新Valve为null，直接返回（不进行后续操作）
         if (valve == null) {
             return;
         }
+        // 若新Valve实现了Contained接口，将其关联到当前容器
         if (valve instanceof Contained) {
             ((Contained) valve).setContainer(this.container);
         }
+        // 若管道状态可用且新Valve支持生命周期管理，启动其生命周期
         if (getState().isAvailable() && valve instanceof Lifecycle) {
             try {
                 ((Lifecycle) valve).start();
             } catch (LifecycleException e) {
+                // 记录启动新Valve时的异常并终止方法
                 log.error(sm.getString("standardPipeline.basic.start"), e);
                 return;
             }
         }
 
-        // 更新链表关系
+        // ------------------------- 更新Valve链表结构 -------------------------
+        // 从第一个Valve开始遍历链表
         Valve current = first;
         while (current != null) {
+            // 找到链表中指向旧基础Valve的节点
             if (current.getNext() == oldBasic) {
+                // 修改该节点的next引用，指向新基础Valve
                 current.setNext(valve);
                 break;
             }
+            // 继续遍历下一个Valve
             current = current.getNext();
         }
 
+        // 将新Valve设置为基础Valve
         this.basic = valve;
     }
 
     /**
-     * 向管道添加Valve
-     * 实现逻辑：
-     * 1. 关联Valve到Container
-     * 2. 启动Valve（如果已启动）
-     * 3. 添加到Valve链表末尾（basic Valve之前）
-     * 4. 触发容器事件
+     * 向管道添加Valve（添加到所有已有普通Valve之后，基础Valve之前）
+     *
+     * 实现逻辑说明：
+     * 1. 容器关联：将新Valve与当前容器建立关联
+     * 2. 生命周期启动：若管道已启动，启动新Valve的生命周期
+     * 3. 链表插入：根据链表当前状态，将新Valve插入到合适位置
+     * 4. 事件通知：触发容器的ADD_VALVE_EVENT事件
+     *
+     * @param valve 要添加的Valve实例
+     * @throws IllegalArgumentException 若Valve拒绝与容器关联
+     * @throws IllegalStateException 若Valve已关联到其他容器
      */
     @Override
     public void addValve(Valve valve) {
-        // 关联Container
+        // ------------------------- 关联Valve到容器 -------------------------
+        // 若Valve实现了Contained接口，设置其关联的容器为当前容器
         if (valve instanceof Contained) {
             ((Contained) valve).setContainer(this.container);
         }
 
-        // 启动Valve
+        // ------------------------- 启动Valve生命周期 -------------------------
+        // 若管道状态可用（已启动或正在启动），启动Valve的生命周期
         if (getState().isAvailable()) {
             if (valve instanceof Lifecycle) {
                 try {
                     ((Lifecycle) valve).start();
                 } catch (LifecycleException e) {
+                    // 记录启动Valve时的异常
                     log.error(sm.getString("standardPipeline.valve.start"), e);
                 }
             }
         }
 
-        // 添加到链表
+        // ------------------------- 插入Valve到链表 -------------------------
+        // 情况1：管道中尚无普通Valve（first为null）
         if (first == null) {
+            // 新Valve成为第一个普通Valve
             first = valve;
+            // 新Valve的next指向基础Valve
             valve.setNext(basic);
-        } else {
+        }
+        // 情况2：管道中已有普通Valve，需找到链表尾部
+        else {
             Valve current = first;
+            // 遍历链表，找到最后一个指向基础Valve的节点
             while (current != null) {
                 if (current.getNext() == basic) {
+                    // 在该节点后插入新Valve
                     current.setNext(valve);
+                    // 新Valve的next指向基础Valve
                     valve.setNext(basic);
                     break;
                 }
@@ -308,7 +361,8 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
         }
 
-        // 触发容器事件
+        // ------------------------- 触发容器事件 -------------------------
+        // 通知容器已添加Valve（用于事件监听和JMX通知）
         container.fireContainerEvent(Container.ADD_VALVE_EVENT, valve);
     }
 
