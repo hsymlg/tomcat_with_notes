@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本接口由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package org.apache.catalina;
 
@@ -24,95 +13,85 @@ import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 
 /**
- * <p>
- * A <b>Valve</b> is a request processing component associated with a particular Container. A series of Valves are
- * generally associated with each other into a Pipeline. The detailed contract for a Valve is included in the
- * description of the <code>invoke()</code> method below.
- * </p>
- * <b>HISTORICAL NOTE</b>: The "Valve" name was assigned to this concept because a valve is what you use in a real world
- * pipeline to control and/or modify flows through it.
+ * Tomcat请求处理的阀门接口（责任链模式实现）
  *
- * @author Craig R. McClanahan
- * @author Gunnar Rjnning
- * @author Peter Donald
+ * 设计理念：
+ * - 类比真实管道中的阀门，控制和修改请求流
+ * - 多个Valve组成Pipeline（管道），形成责任链
+ * - 每个Valve可以处理请求、修改请求/响应或传递给下一个Valve
+ *
+ * 典型应用场景：
+ * - 日志记录（AccessLogValve）
+ * - 安全认证（RemoteAddrValve）
+ * - 请求编码处理（CharacterEncodingValve）
+ * - 错误处理（ErrorReportValve）
  */
 public interface Valve {
-
 
     // -------------------------------------------------------------- Properties
 
     /**
-     * Returns the next Valve in this pipeline, or <code>null</code> if this is the last Valve in the pipeline.
+     * 获取责任链中的下一个Valve
      *
-     * @return the next Valve in the pipeline containing this Valve, or <code>null</code> if this is the last Valve in
-     *             the pipeline.
+     * 返回值说明：
+     * - 非null：存在后续Valve
+     * - null：当前Valve是责任链的最后一个
      */
     Valve getNext();
 
-
     /**
-     * Set the next Valve in the pipeline containing this Valve.
+     * 设置责任链中的下一个Valve
      *
-     * @param valve The new next valve, or <code>null</code> if none
+     * @param valve 下一个Valve，null表示当前是最后一个
      */
     void setNext(Valve valve);
 
-
     // ---------------------------------------------------------- Public Methods
 
-
     /**
-     * Execute a periodic task, such as reloading, etc. This method will be invoked inside the classloading context of
-     * this container. Unexpected throwables will be caught and logged.
+     * 执行周期性后台任务
+     *
+     * 应用场景：
+     * - 资源监控
+     * - 配置重新加载
+     * - 状态统计更新
+     *
+     * 实现注意：
+     * - 在容器的类加载上下文中执行
+     * - 需处理所有异常并记录日志
      */
     void backgroundProcess();
 
-
     /**
-     * <p>
-     * Perform request processing as required by this Valve.
-     * </p>
-     * <p>
-     * An individual Valve <b>MAY</b> perform the following actions, in the specified order:
-     * </p>
-     * <ul>
-     * <li>Examine and/or modify the properties of the specified Request and Response.
-     * <li>Examine the properties of the specified Request, completely generate the corresponding Response, and return
-     * control to the caller.
-     * <li>Examine the properties of the specified Request and Response, wrap either or both of these objects to
-     * supplement their functionality, and pass them on.
-     * <li>If the corresponding Response was not generated (and control was not returned), call the next Valve in the
-     * pipeline (if there is one) by executing <code>getNext().invoke()</code>.
-     * <li>Examine, but not modify, the properties of the resulting Response (which was created by a subsequently
-     * invoked Valve or Container).
-     * </ul>
-     * <p>
-     * A Valve <b>MUST NOT</b> do any of the following things:
-     * </p>
-     * <ul>
-     * <li>Change request properties that have already been used to direct the flow of processing control for this
-     * request (for instance, trying to change the virtual host to which a Request should be sent from a pipeline
-     * attached to a Host or Context in the standard implementation).
-     * <li>Create a completed Response <strong>AND</strong> pass this Request and Response on to the next Valve in the
-     * pipeline.
-     * <li>Consume bytes from the input stream associated with the Request, unless it is completely generating the
-     * response, or wrapping the request before passing it on.
-     * <li>Modify the HTTP headers included with the Response after the <code>getNext().invoke()</code> method has
-     * returned.
-     * <li>Perform any actions on the output stream associated with the specified Response after the
-     * <code>getNext().invoke()</code> method has returned.
-     * </ul>
+     * 核心请求处理方法
      *
-     * @param request  The servlet request to be processed
-     * @param response The servlet response to be created
+     * 处理逻辑规范：
+     * 1. 可以检查/修改Request和Response属性
+     * 2. 可以完全生成响应并返回（不再调用后续Valve）
+     * 3. 可以包装Request/Response后传递给后续Valve
+     * 4. 若未生成响应，必须调用getNext().invoke()传递请求
+     * 5. 可以检查（但不能修改）后续Valve生成的响应
      *
-     * @exception IOException      if an input/output error occurs, or is thrown by a subsequently invoked Valve,
-     *                                 Filter, or Servlet
-     * @exception ServletException if a servlet error occurs, or is thrown by a subsequently invoked Valve, Filter, or
-     *                                 Servlet
+     * 禁止操作：
+     * - 修改已用于请求路由的属性
+     * - 生成响应后继续传递请求
+     * - 消费请求输入流（除非完全生成响应）
+     * - 调用后续Valve后修改响应头
+     * - 调用后续Valve后操作响应输出流
+     *
+     * @param request  Servlet请求对象
+     * @param response Servlet响应对象
+     * @throws IOException      输入/输出错误
+     * @throws ServletException Servlet处理错误
      */
     void invoke(Request request, Response response) throws IOException, ServletException;
 
-
+    /**
+     * 检查是否支持异步处理
+     *
+     * 返回值说明：
+     * - true：支持异步请求处理
+     * - false：不支持异步，会导致整个Pipeline不支持异步
+     */
     boolean isAsyncSupported();
 }

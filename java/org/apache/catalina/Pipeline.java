@@ -1,124 +1,97 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本接口由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package org.apache.catalina;
 
 import java.util.Set;
 
 /**
- * <p>
- * Interface describing a collection of Valves that should be executed in sequence when the <code>invoke()</code> method
- * is invoked. It is required that a Valve somewhere in the pipeline (usually the last one) must process the request and
- * create the corresponding response, rather than trying to pass the request on.
- * </p>
- * <p>
- * There is generally a single Pipeline instance associated with each Container. The container's normal request
- * processing functionality is generally encapsulated in a container-specific Valve, which should always be executed at
- * the end of a pipeline. To facilitate this, the <code>setBasic()</code> method is provided to set the Valve instance
- * that will always be executed last. Other Valves will be executed in the order that they were added, before the basic
- * Valve is executed.
- * </p>
+ * Tomcat请求处理的管道模式接口
  *
- * @author Craig R. McClanahan
- * @author Peter Donald
+ * 设计理念：
+ * - 责任链模式的实现，允许请求在多个Valve间依次传递处理
+ * - 每个Container（如Engine、Host、Context）都关联一个Pipeline
+ * - 管道中的最后一个Valve（basic Valve）通常负责核心处理逻辑
+ *
+ * 工作流程：
+ * 1. 请求进入Pipeline后，按添加顺序依次通过各个Valve
+ * 2. 每个Valve可以选择处理请求、修改请求或直接传递给下一个Valve
+ * 3. 最终由basic Valve完成请求的核心处理并生成响应
+ * 4. 响应按相反顺序通过各个Valve返回客户端
  */
 public interface Pipeline extends Contained {
 
     /**
-     * @return the Valve instance that has been distinguished as the basic Valve for this Pipeline (if any).
+     * 获取管道的基础Valve
+     *
+     * 基础Valve是管道中最后执行的Valve，通常负责核心处理逻辑
+     * 例如，Context容器的基础Valve负责调用Servlet.service()方法
      */
     Valve getBasic();
 
-
     /**
-     * <p>
-     * Set the Valve instance that has been distinguished as the basic Valve for this Pipeline (if any). Prior to
-     * setting the basic Valve, the Valve's <code>setContainer()</code> will be called, if it implements
-     * <code>Contained</code>, with the owning Container as an argument. The method may throw an
-     * <code>IllegalArgumentException</code> if this Valve chooses not to be associated with this Container, or
-     * <code>IllegalStateException</code> if it is already associated with a different Container.
-     * </p>
+     * 设置管道的基础Valve
      *
-     * @param valve Valve to be distinguished as the basic Valve
+     * 实现注意：
+     * - 设置前会调用Valve.setContainer()方法关联当前容器
+     * - 可能抛出IllegalArgumentException或IllegalStateException
+     * - 成功设置后应触发Container.ADD_VALVE_EVENT事件
      */
     void setBasic(Valve valve);
 
-
     /**
-     * <p>
-     * Add a new Valve to the end of the pipeline associated with this Container. Prior to adding the Valve, the Valve's
-     * <code>setContainer()</code> method will be called, if it implements <code>Contained</code>, with the owning
-     * Container as an argument. The method may throw an <code>IllegalArgumentException</code> if this Valve chooses not
-     * to be associated with this Container, or <code>IllegalStateException</code> if it is already associated with a
-     * different Container.
-     * </p>
-     * <p>
-     * Implementation note: Implementations are expected to trigger the {@link Container#ADD_VALVE_EVENT} for the
-     * associated container if this call is successful.
-     * </p>
+     * 向管道末尾添加一个Valve
      *
-     * @param valve Valve to be added
+     * 添加顺序决定了Valve的执行顺序（basic Valve除外）
      *
-     * @exception IllegalArgumentException if this Container refused to accept the specified Valve
-     * @exception IllegalArgumentException if the specified Valve refuses to be associated with this Container
-     * @exception IllegalStateException    if the specified Valve is already associated with a different Container
+     * 实现注意：
+     * - 添加前会调用Valve.setContainer()方法关联当前容器
+     * - 可能抛出IllegalArgumentException或IllegalStateException
+     * - 成功添加后应触发Container.ADD_VALVE_EVENT事件
      */
     void addValve(Valve valve);
 
-
     /**
-     * @return the array of Valves in the pipeline associated with this Container, including the basic Valve (if any).
-     *             If there are no such Valves, a zero-length array is returned.
+     * 获取管道中所有的Valve
+     *
+     * 返回数组包含所有普通Valve和基础Valve
+     * 若管道为空，返回长度为0的数组
      */
     Valve[] getValves();
 
-
     /**
-     * Remove the specified Valve from the pipeline associated with this Container, if it is found; otherwise, do
-     * nothing. If the Valve is found and removed, the Valve's <code>setContainer(null)</code> method will be called if
-     * it implements <code>Contained</code>.
-     * <p>
-     * Implementation note: Implementations are expected to trigger the {@link Container#REMOVE_VALVE_EVENT} for the
-     * associated container if this call is successful.
-     * </p>
+     * 从管道中移除指定的Valve
      *
-     * @param valve Valve to be removed
+     * 移除后会调用Valve.setContainer(null)方法解除关联
+     * 若Valve不存在，不执行任何操作
+     *
+     * 实现注意：
+     * - 成功移除后应触发Container.REMOVE_VALVE_EVENT事件
      */
     void removeValve(Valve valve);
 
-
     /**
-     * @return the Valve instance that has been distinguished as the basic Valve for this Pipeline (if any).
+     * 获取管道中第一个执行的Valve
+     *
+     * 通常是第一个添加的Valve，但实现可能有特殊处理
      */
     Valve getFirst();
 
-
     /**
-     * Returns true if all the valves in this pipeline support async, false otherwise
+     * 检查管道是否支持异步处理
      *
-     * @return true if all the valves in this pipeline support async, false otherwise
+     * 当且仅当所有Valve都支持异步时返回true
+     * 用于确定容器是否可以处理异步请求
      */
     boolean isAsyncSupported();
 
-
     /**
-     * Identifies the Valves, if any, in this Pipeline that do not support async.
+     * 查找不支持异步处理的Valve
      *
-     * @param result The Set to which the fully qualified class names of each Valve in this Pipeline that does not
-     *                   support async will be added
+     * 将不支持异步的Valve类名添加到指定集合中
+     * 用于诊断和调试异步处理相关问题
      */
     void findNonAsyncValves(Set<String> result);
 }

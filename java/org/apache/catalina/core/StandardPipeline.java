@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本类由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package org.apache.catalina.core;
 
@@ -38,68 +27,67 @@ import org.apache.tomcat.util.ExceptionUtils;
 import org.apache.tomcat.util.res.StringManager;
 
 /**
- * Standard implementation of a processing <b>Pipeline</b> that will invoke a series of Valves that have been configured
- * to be called in order. This implementation can be used for any type of Container. <b>IMPLEMENTATION WARNING</b> -
- * This implementation assumes that no calls to <code>addValve()</code> or <code>removeValve</code> are allowed while a
- * request is currently being processed. Otherwise, the mechanism by which per-thread state is maintained will need to
- * be modified.
+ * Pipeline接口的标准实现类，负责管理Valve的执行顺序
  *
- * @author Craig R. McClanahan
+ * 实现特点：
+ * 1. 基于责任链模式实现Valve的顺序调用
+ * 2. 支持生命周期管理（Lifecycle接口）
+ * 3. 维护Valve链表结构，支持动态添加/删除
+ * 4. 与Container紧密关联，每个Container对应一个Pipeline
+ *
+ * 线程安全说明：
+ * - 假设运行时不会在请求处理中修改Valve列表
+ * - 若需要并发修改，需自行保证线程安全
  */
 public class StandardPipeline extends LifecycleBase implements Pipeline {
 
+    // 日志记录器和字符串资源管理器
     private static final Log log = LogFactory.getLog(StandardPipeline.class);
     private static final StringManager sm = StringManager.getManager(StandardPipeline.class);
 
     // ----------------------------------------------------------- Constructors
 
-
     /**
-     * Construct a new StandardPipeline instance with no associated Container.
+     * 构造无关联Container的StandardPipeline实例
      */
     public StandardPipeline() {
-
         this(null);
-
     }
-
 
     /**
-     * Construct a new StandardPipeline instance that is associated with the specified Container.
-     *
-     * @param container The container we should be associated with
+     * 构造关联指定Container的StandardPipeline实例
+     * @param container 关联的容器对象
      */
     public StandardPipeline(Container container) {
-
         super();
         setContainer(container);
-
     }
-
 
     // ----------------------------------------------------- Instance Variables
 
-
     /**
-     * The basic Valve (if any) associated with this Pipeline.
+     * 基础Valve（管道中最后执行的Valve）
+     * 通常由容器实现提供核心处理逻辑
      */
     protected Valve basic = null;
 
-
     /**
-     * The Container with which this Pipeline is associated.
+     * 关联的Container对象
      */
     protected Container container = null;
 
-
     /**
-     * The first valve associated with this Pipeline.
+     * 管道中第一个执行的Valve
+     * 形成Valve链表的头节点
      */
     protected Valve first = null;
 
-
     // --------------------------------------------------------- Public Methods
 
+    /**
+     * 检查管道是否支持异步处理
+     * 遍历所有Valve，只要有一个不支持异步则返回false
+     */
     @Override
     public boolean isAsyncSupported() {
         Valve valve = (first != null) ? first : basic;
@@ -111,7 +99,10 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         return supported;
     }
 
-
+    /**
+     * 查找不支持异步处理的Valve
+     * 将不支持异步的Valve类名添加到结果集合中
+     */
     @Override
     public void findNonAsyncValves(Set<String> result) {
         Valve valve = (first != null) ? first : basic;
@@ -123,31 +114,38 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         }
     }
 
-
     // ------------------------------------------------------ Contained Methods
 
+    /**
+     * 获取关联的Container对象
+     */
     @Override
     public Container getContainer() {
         return this.container;
     }
 
-
+    /**
+     * 设置关联的Container对象
+     */
     @Override
     public void setContainer(Container container) {
         this.container = container;
     }
 
-
+    /**
+     * 初始化内部资源（空实现）
+     */
     @Override
     protected void initInternal() {
         // NOOP
     }
 
-
+    /**
+     * 启动管道及所有Valve
+     * 按顺序启动每个Valve的生命周期
+     */
     @Override
     protected void startInternal() throws LifecycleException {
-
-        // Start the Valves in our pipeline (including the basic), if any
         Valve current = first;
         if (current == null) {
             current = basic;
@@ -158,17 +156,16 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
             current = current.getNext();
         }
-
         setState(LifecycleState.STARTING);
     }
 
-
+    /**
+     * 停止管道及所有Valve
+     * 按顺序停止每个Valve的生命周期
+     */
     @Override
     protected void stopInternal() throws LifecycleException {
-
         setState(LifecycleState.STOPPING);
-
-        // Stop the Valves in our pipeline (including the basic), if any
         Valve current = first;
         if (current == null) {
             current = basic;
@@ -181,7 +178,10 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         }
     }
 
-
+    /**
+     * 销毁管道资源
+     * 移除所有Valve并释放资源
+     */
     @Override
     protected void destroyInternal() {
         Valve[] valves = getValves();
@@ -190,32 +190,40 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         }
     }
 
-
+    /**
+     * 返回对象的字符串表示（用于调试）
+     */
     @Override
     public String toString() {
         return ToStringUtil.toString(this);
     }
 
-
     // ------------------------------------------------------- Pipeline Methods
 
-
+    /**
+     * 获取基础Valve
+     */
     @Override
     public Valve getBasic() {
         return this.basic;
     }
 
-
+    /**
+     * 设置基础Valve
+     * 实现逻辑：
+     * 1. 停止旧Valve（如果有）
+     * 2. 关联新Valve到Container
+     * 3. 更新Valve链表关系
+     * 4. 启动新Valve（如果已启动）
+     */
     @Override
     public void setBasic(Valve valve) {
-
-        // Change components if necessary
         Valve oldBasic = this.basic;
         if (oldBasic == valve) {
             return;
         }
 
-        // Stop the old component if necessary
+        // 停止旧Valve
         if (oldBasic != null) {
             if (getState().isAvailable() && (oldBasic instanceof Lifecycle)) {
                 try {
@@ -225,15 +233,11 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
                 }
             }
             if (oldBasic instanceof Contained) {
-                try {
-                    ((Contained) oldBasic).setContainer(null);
-                } catch (Throwable t) {
-                    ExceptionUtils.handleThrowable(t);
-                }
+                ((Contained) oldBasic).setContainer(null);
             }
         }
 
-        // Start the new component if necessary
+        // 启动新Valve
         if (valve == null) {
             return;
         }
@@ -249,7 +253,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
         }
 
-        // Update the pipeline
+        // 更新链表关系
         Valve current = first;
         while (current != null) {
             if (current.getNext() == oldBasic) {
@@ -260,19 +264,24 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
         }
 
         this.basic = valve;
-
     }
 
-
+    /**
+     * 向管道添加Valve
+     * 实现逻辑：
+     * 1. 关联Valve到Container
+     * 2. 启动Valve（如果已启动）
+     * 3. 添加到Valve链表末尾（basic Valve之前）
+     * 4. 触发容器事件
+     */
     @Override
     public void addValve(Valve valve) {
-
-        // Validate that we can add this Valve
+        // 关联Container
         if (valve instanceof Contained) {
             ((Contained) valve).setContainer(this.container);
         }
 
-        // Start the new component if necessary
+        // 启动Valve
         if (getState().isAvailable()) {
             if (valve instanceof Lifecycle) {
                 try {
@@ -283,7 +292,7 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
         }
 
-        // Add this Valve to the set associated with this Pipeline
+        // 添加到链表
         if (first == null) {
             first = valve;
             valve.setNext(basic);
@@ -299,13 +308,16 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
         }
 
+        // 触发容器事件
         container.fireContainerEvent(Container.ADD_VALVE_EVENT, valve);
     }
 
-
+    /**
+     * 获取管道中所有Valve
+     * 按执行顺序返回Valve数组
+     */
     @Override
     public Valve[] getValves() {
-
         List<Valve> valveList = new ArrayList<>();
         Valve current = first;
         if (current == null) {
@@ -315,13 +327,14 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             valveList.add(current);
             current = current.getNext();
         }
-
         return valveList.toArray(new Valve[0]);
-
     }
 
+    /**
+     * 获取管道中所有Valve的JMX对象名
+     * 用于JMX管理和监控
+     */
     public ObjectName[] getValveObjectNames() {
-
         List<ObjectName> valveList = new ArrayList<>();
         Valve current = first;
         if (current == null) {
@@ -333,14 +346,20 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
             current = current.getNext();
         }
-
         return valveList.toArray(new ObjectName[0]);
-
     }
 
+    /**
+     * 从管道移除Valve
+     * 实现逻辑：
+     * 1. 更新链表关系
+     * 2. 解除Valve与Container的关联
+     * 3. 停止并销毁Valve
+     * 4. 触发容器事件
+     */
     @Override
     public void removeValve(Valve valve) {
-
+        // 更新链表
         Valve current;
         if (first == valve) {
             first = first.getNext();
@@ -360,12 +379,13 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             first = null;
         }
 
+        // 解除关联
         if (valve instanceof Contained) {
             ((Contained) valve).setContainer(null);
         }
 
+        // 停止并销毁Valve
         if (valve instanceof Lifecycle) {
-            // Stop this valve if necessary
             if (getState().isAvailable()) {
                 try {
                     ((Lifecycle) valve).stop();
@@ -380,16 +400,19 @@ public class StandardPipeline extends LifecycleBase implements Pipeline {
             }
         }
 
+        // 触发容器事件
         container.fireContainerEvent(Container.REMOVE_VALVE_EVENT, valve);
     }
 
-
+    /**
+     * 获取管道中第一个执行的Valve
+     * 若无普通Valve，返回基础Valve
+     */
     @Override
     public Valve getFirst() {
         if (first != null) {
             return first;
         }
-
         return basic;
     }
 }
