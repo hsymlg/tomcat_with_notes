@@ -725,30 +725,38 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
 
         @Override
         public SocketState process(SocketWrapperBase<S> wrapper, SocketEvent status) {
+            // 记录跟踪日志，显示当前处理的套接字和事件
             if (getLog().isTraceEnabled()) {
                 getLog().trace(sm.getString("abstractConnectionHandler.process", wrapper.getSocket(), status));
             }
+            // 若套接字包装器为空，直接返回关闭状态
             if (wrapper == null) {
                 return SocketState.CLOSED;
             }
+            // 获取底层套接字和当前处理器
             S socket = wrapper.getSocket();
             Processor processor = (Processor) wrapper.takeCurrentProcessor();
+            // 记录当前处理器获取日志
             if (getLog().isTraceEnabled()) {
                 getLog().trace(sm.getString("abstractConnectionHandler.connectionsGet", processor, socket));
             }
+            // 处理超时事件：若处理器不存在、非异步/升级状态或异步超时，返回打开状态
             if (SocketEvent.TIMEOUT == status && (processor == null || !processor.isAsync() && !processor.isUpgrade() ||
                 processor.isAsync() && !processor.checkAsyncTimeoutGeneration())) {
                 return SocketState.OPEN;
             }
+            // 若存在处理器，从等待队列中移除；若事件为断开或错误，返回关闭状态
             if (processor != null) {
                 proto.removeWaitingProcessor(processor);
             } else if (status == SocketEvent.DISCONNECT || status == SocketEvent.ERROR) {
                 return SocketState.CLOSED;
             }
             try {
+                // 若处理器为空，根据协商协议创建对应处理器
                 if (processor == null) {
                     String negotiatedProtocol = wrapper.getNegotiatedProtocol();
                     if (negotiatedProtocol != null && !negotiatedProtocol.isEmpty()) {
+                        // 获取协商协议对应的升级协议处理器
                         UpgradeProtocol upgradeProtocol = proto.getNegotiatedProtocol(negotiatedProtocol);
                         if (upgradeProtocol != null) {
                             processor = upgradeProtocol.getProcessor(wrapper, proto.getAdapter());
@@ -756,8 +764,9 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                                 getLog().trace(sm.getString("abstractConnectionHandler.processorCreate", processor));
                             }
                         } else if (negotiatedProtocol.equals("http/1.1")) {
-                            // 处理默认协议
+                            // 处理默认HTTP/1.1协议（空实现，由子类处理）
                         } else {
+                            // 未知协议时记录调试日志并关闭连接
                             if (getLog().isDebugEnabled()) {
                                 getLog().debug(sm.getString("abstractConnectionHandler.negotiatedProcessor.fail",
                                     negotiatedProtocol));
@@ -766,6 +775,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                         }
                     }
                 }
+                // 从回收队列获取处理器，若无则创建新处理器
                 if (processor == null) {
                     processor = recycledProcessors.pop();
                     if (getLog().isTraceEnabled()) {
@@ -779,32 +789,39 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                         getLog().trace(sm.getString("abstractConnectionHandler.processorCreate", processor));
                     }
                 }
+                // 设置处理器的SSL支持
                 processor.setSslSupport(wrapper.getSslSupport());
                 SocketState state;
+                // 循环处理协议升级状态
                 do {
                     state = processor.process(wrapper, status);
                     if (state == SocketState.UPGRADING) {
+                        // 获取升级令牌和剩余输入数据
                         UpgradeToken upgradeToken = processor.getUpgradeToken();
                         ByteBuffer leftOverInput = processor.getLeftoverInput();
-                        wrapper.unRead(leftOverInput);
+                        wrapper.unRead(leftOverInput); // 将剩余数据回写套接字
                         if (upgradeToken == null) {
+                            // 尝试H2C协议升级
                             UpgradeProtocol upgradeProtocol = proto.getUpgradeProtocol("h2c");
                             if (upgradeProtocol != null) {
-                                release(processor);
+                                release(processor); // 释放当前处理器
                                 processor = upgradeProtocol.getProcessor(wrapper, proto.getAdapter());
                             } else {
+                                // H2C协议不支持时记录调试日志并关闭连接
                                 if (getLog().isDebugEnabled()) {
                                     getLog().debug(sm.getString("abstractConnectionHandler.negotiatedProcessor.fail", "h2c"));
                                 }
                                 state = SocketState.CLOSED;
                             }
                         } else {
+                            // 处理协议升级逻辑
                             HttpUpgradeHandler httpUpgradeHandler = upgradeToken.getHttpUpgradeHandler();
-                            release(processor);
-                            processor = proto.createUpgradeProcessor(wrapper, upgradeToken);
+                            release(processor); // 释放当前处理器
+                            processor = proto.createUpgradeProcessor(wrapper, upgradeToken); // 创建升级处理器
                             if (getLog().isTraceEnabled()) {
                                 getLog().trace(sm.getString("abstractConnectionHandler.upgradeCreate", processor, wrapper));
                             }
+                            // 初始化升级处理器（根据是否存在实例管理器）
                             if (upgradeToken.getInstanceManager() == null) {
                                 httpUpgradeHandler.init((WebConnection) processor);
                             } else {
@@ -815,6 +832,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                                     upgradeToken.getContextBind().unbind(false, oldCL);
                                 }
                             }
+                            // 若支持异步IO，设置状态为异步IO
                             if (httpUpgradeHandler instanceof InternalHttpUpgradeHandler) {
                                 if (((InternalHttpUpgradeHandler) httpUpgradeHandler).hasAsyncIO()) {
                                     state = SocketState.ASYNC_IO;
@@ -823,30 +841,37 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                         }
                     }
                 } while (state == SocketState.UPGRADING);
+                // 根据处理状态执行不同操作
                 if (state == SocketState.LONG) {
+                    // 长轮询处理
                     longPoll(wrapper, processor);
                     if (processor.isAsync()) {
-                        proto.addWaitingProcessor(processor);
+                        proto.addWaitingProcessor(processor); // 添加到等待队列
                     }
                 } else if (state == SocketState.OPEN) {
+                    // 释放处理器并注册读事件
                     release(processor);
                     processor = null;
                     wrapper.registerReadInterest();
                 } else if (state == SocketState.SENDFILE) {
-                    // 处理sendfile
+                    // 处理文件发送（空实现，由子类处理）
                 } else if (state == SocketState.UPGRADED) {
+                    // 协议升级完成后处理
                     if (status != SocketEvent.OPEN_WRITE) {
                         longPoll(wrapper, processor);
                         proto.addWaitingProcessor(processor);
                     }
                 } else if (state == SocketState.ASYNC_IO) {
+                    // 异步IO处理
                     if (status != SocketEvent.OPEN_WRITE) {
                         proto.addWaitingProcessor(processor);
                     }
                 } else if (state == SocketState.SUSPENDED) {
-                    // 处理挂起状态
+                    // 处理挂起状态（空实现，由子类处理）
                 } else {
+                    // 其他状态处理（如连接关闭）
                     if (processor.isUpgrade()) {
+                        // 释放升级处理器资源
                         UpgradeToken upgradeToken = processor.getUpgradeToken();
                         HttpUpgradeHandler httpUpgradeHandler = upgradeToken.getHttpUpgradeHandler();
                         InstanceManager instanceManager = upgradeToken.getInstanceManager();
@@ -867,25 +892,32 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler, MBeanRegis
                             }
                         }
                     }
-                    release(processor);
+                    release(processor); // 释放处理器
                     processor = null;
                 }
+                // 若处理器非空，设置为当前处理器
                 if (processor != null) {
                     wrapper.setCurrentProcessor(processor);
                 }
                 return state;
             } catch (SocketException e) {
+                // 套接字异常处理（记录调试日志）
                 getLog().debug(sm.getString("abstractConnectionHandler.socketexception.debug"), e);
             } catch (IOException e) {
+                // IO异常处理（记录调试日志）
                 getLog().debug(sm.getString("abstractConnectionHandler.ioexception.debug"), e);
             } catch (ProtocolException e) {
+                // 协议异常处理（记录调试日志）
                 getLog().debug(sm.getString("abstractConnectionHandler.protocolexception.debug"), e);
             } catch (OutOfMemoryError oome) {
+                // 内存溢出错误处理（记录错误日志）
                 getLog().error(sm.getString("abstractConnectionHandler.oome"), oome);
             } catch (Throwable e) {
+                // 其他异常处理（记录错误日志）
                 ExceptionUtils.handleThrowable(e);
                 getLog().error(sm.getString("abstractConnectionHandler.error"), e);
             }
+            // 释放处理器并返回关闭状态
             release(processor);
             return SocketState.CLOSED;
         }

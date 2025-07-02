@@ -28,68 +28,86 @@ import org.apache.tomcat.util.net.SocketEvent;
 import org.apache.tomcat.util.net.SocketWrapperBase;
 
 /**
- * This is a light-weight abstract processor implementation that is intended as a basis for all Processor
- * implementations from the light-weight upgrade processors to the HTTP/AJP processors.
+ * 轻量级处理器抽象实现，作为所有处理器实现的基础类
+ * 涵盖从HTTP/AJP处理器到轻量级协议升级处理器等各种实现
  */
 public abstract class AbstractProcessorLight implements Processor {
 
+    // 存储待处理的调度任务集合，使用线程安全的CopyOnWriteArraySet
     private final Set<DispatchType> dispatches = new CopyOnWriteArraySet<>();
 
 
+    /**
+     * 处理套接字事件的主循环方法
+     * 支持标准HTTP请求、异步请求、协议升级等多种处理模式
+     *
+     * @param socketWrapper 套接字包装对象，包含底层网络连接信息
+     * @param status        待处理的套接字事件类型
+     * @return 处理完成后的套接字状态
+     * @throws IOException 发生I/O异常时抛出
+     */
     @Override
     public SocketState process(SocketWrapperBase<?> socketWrapper, SocketEvent status) throws IOException {
 
-        SocketState state = SocketState.CLOSED;
-        Iterator<DispatchType> dispatches = null;
+        SocketState state = SocketState.CLOSED;  // 默认状态为关闭
+        Iterator<DispatchType> dispatches = null;  // 待处理的调度任务迭代器
+
+        // 主处理循环：处理所有待处理的调度任务和套接字事件
         do {
             if (dispatches != null) {
+                // 处理已注册的调度任务
                 DispatchType nextDispatch = dispatches.next();
                 if (getLog().isTraceEnabled()) {
                     getLog().trace("Processing dispatch type: [" + nextDispatch + "]");
                 }
-                state = dispatch(nextDispatch.getSocketStatus());
+                state = dispatch(nextDispatch.getSocketStatus());  // 执行调度任务
+
+                // 如果所有调度任务处理完毕，检查是否有管道数据需要处理
                 if (!dispatches.hasNext()) {
                     state = checkForPipelinedData(state, socketWrapper);
                 }
             } else if (status == SocketEvent.DISCONNECT) {
-                // Do nothing here, just wait for it to get recycled
+                // 断开连接事件：不做处理，等待处理器回收
             } else if (isAsync() || isUpgrade() || state == SocketState.ASYNC_END) {
+                // 异步请求、协议升级或异步结束状态：通过dispatch方法处理事件
                 state = dispatch(status);
-                state = checkForPipelinedData(state, socketWrapper);
+                state = checkForPipelinedData(state, socketWrapper);  // 检查管道数据
             } else if (status == SocketEvent.OPEN_WRITE) {
-                // Extra write event likely after async, ignore
+                // 写事件：可能是异步操作后的额外写事件，忽略并保持长连接状态
                 state = SocketState.LONG;
             } else if (status == SocketEvent.OPEN_READ) {
+                // 读事件：处理标准HTTP请求
                 state = service(socketWrapper);
             } else if (status == SocketEvent.CONNECT_FAIL) {
+                // 连接失败事件：记录访问日志
                 logAccess(socketWrapper);
             } else {
-                // Default to closing the socket if the SocketEvent passed in
-                // is not consistent with the current state of the Processor
+                // 未知或不支持的事件类型：默认关闭套接字
                 state = SocketState.CLOSED;
             }
 
+            // 记录详细的状态转换信息（调试级别）
             if (getLog().isTraceEnabled()) {
                 getLog().trace(
-                        "Socket: [" + socketWrapper + "], Status in: [" + status + "], State out: [" + state + "]");
+                    "Socket: [" + socketWrapper + "], Status in: [" + status + "], State out: [" + state + "]");
             }
 
             /*
-             * If state is already CLOSED don't call asyncPostProcess() as that will likely change the state to some
-             * other value causing processing to continue when it should cease. The AsyncStateMachine will be recycled
-             * as part of the Processor clean-up on CLOSED so it doesn't matter what state it is left in at this point.
+             * 异步请求后处理逻辑：
+             * 1. 仅在非关闭状态下执行异步后处理
+             * 2. 避免在CLOSED状态下执行，防止状态被错误修改
              */
             if (isAsync() && state != SocketState.CLOSED) {
                 state = asyncPostProcess();
                 if (getLog().isTraceEnabled()) {
                     getLog().trace(
-                            "Socket: [" + socketWrapper + "], State after async post processing: [" + state + "]");
+                        "Socket: [" + socketWrapper + "], State after async post processing: [" + state + "]");
                 }
             }
 
+            // 如果当前调度任务处理完毕，获取并清空下一批调度任务
             if (dispatches == null || !dispatches.hasNext()) {
-                // Only returns non-null iterator if there are
-                // dispatches to process.
+                // 仅当有新的调度任务时返回非空迭代器
                 dispatches = getIteratorAndClearDispatches();
             }
         } while (state == SocketState.ASYNC_END || dispatches != null && state != SocketState.CLOSED);
@@ -98,14 +116,20 @@ public abstract class AbstractProcessorLight implements Processor {
     }
 
 
+    /**
+     * 检查并处理HTTP管道数据
+     * 当处理器状态为OPEN时，表示可能存在管道中的后续请求，需要立即处理
+     *
+     * @param inState       当前处理器状态
+     * @param socketWrapper 套接字包装对象
+     * @return 处理后的新状态
+     * @throws IOException 发生I/O异常时抛出
+     */
     private SocketState checkForPipelinedData(SocketState inState, SocketWrapperBase<?> socketWrapper)
-            throws IOException {
+        throws IOException {
         if (inState == SocketState.OPEN) {
-            // There may be pipe-lined data to read. If the data isn't
-            // processed now, execution will exit this loop and call
-            // release() which will recycle the processor (and input
-            // buffer) deleting any pipe-lined data. To avoid this,
-            // process it now.
+            // 状态为OPEN时，可能存在管道数据需要读取
+            // 立即处理以避免处理器回收导致数据丢失
             return service(socketWrapper);
         } else {
             return inState;
@@ -113,6 +137,12 @@ public abstract class AbstractProcessorLight implements Processor {
     }
 
 
+    /**
+     * 添加一个调度任务到待处理集合
+     * 调度任务将在后续的处理循环中被执行
+     *
+     * @param dispatchType 待添加的调度任务类型
+     */
     public void addDispatch(DispatchType dispatchType) {
         synchronized (dispatches) {
             dispatches.add(dispatchType);
@@ -120,25 +150,30 @@ public abstract class AbstractProcessorLight implements Processor {
     }
 
 
+    /**
+     * 获取待处理调度任务的迭代器并清空集合
+     * 注意：根据AbstractProtocol中的逻辑，只有当集合非空时才返回非空迭代器
+     *
+     * @return 调度任务迭代器（集合为空时返回null）
+     */
     public Iterator<DispatchType> getIteratorAndClearDispatches() {
-        // Note: Logic in AbstractProtocol depends on this method only returning
-        // a non-null value if the iterator is non-empty. i.e. it should never
-        // return an empty iterator.
         Iterator<DispatchType> result;
         synchronized (dispatches) {
-            // Synchronized as the generation of the iterator and the clearing
-            // of dispatches needs to be an atomic operation.
+            // 同步操作确保迭代器生成和集合清空的原子性
             result = dispatches.iterator();
             if (result.hasNext()) {
-                dispatches.clear();
+                dispatches.clear();  // 清空集合
             } else {
-                result = null;
+                result = null;  // 集合为空时返回null
             }
         }
         return result;
     }
 
 
+    /**
+     * 清空所有待处理的调度任务
+     */
     protected void clearDispatches() {
         synchronized (dispatches) {
             dispatches.clear();
@@ -147,53 +182,51 @@ public abstract class AbstractProcessorLight implements Processor {
 
 
     /**
-     * Add an entry to the access log for a failed connection attempt.
+     * 记录连接失败的访问日志
+     * 默认实现为空，具体实现由子类提供
      *
-     * @param socketWrapper The connection to process
-     *
-     * @throws IOException If an I/O error occurs during the processing of the request
+     * @param socketWrapper 连接相关的套接字包装对象
+     * @throws IOException 发生I/O异常时抛出
      */
     protected void logAccess(SocketWrapperBase<?> socketWrapper) throws IOException {
-        // NO-OP by default
+        // 默认不执行任何操作，由子类根据需要实现
     }
 
 
     /**
-     * Service a 'standard' HTTP request. This method is called for both new requests and for requests that have
-     * partially read the HTTP request line or HTTP headers. Once the headers have been fully read this method is not
-     * called again until there is a new HTTP request to process. Note that the request type may change during
-     * processing which may result in one or more calls to {@link #dispatch(SocketEvent)}. Requests may be pipe-lined.
+     * 处理标准HTTP请求的抽象方法
+     * 负责处理新请求以及部分读取的HTTP请求行或头部
+     * 支持HTTP请求的管道化处理
      *
-     * @param socketWrapper The connection to process
-     *
-     * @return The state the caller should put the socket in when this method returns
-     *
-     * @throws IOException If an I/O error occurs during the processing of the request
+     * @param socketWrapper 待处理的套接字包装对象
+     * @return 处理后的套接字状态
+     * @throws IOException 发生I/O异常时抛出
      */
     protected abstract SocketState service(SocketWrapperBase<?> socketWrapper) throws IOException;
 
     /**
-     * Process an in-progress request that is no longer in standard HTTP mode. Uses currently include Servlet 3.0 Async
-     * and HTTP upgrade connections. Further uses may be added in the future. These will typically start as HTTP
-     * requests.
+     * 处理非标准HTTP模式的请求
+     * 包括Servlet 3.0异步请求和HTTP协议升级连接等场景
+     * 这些请求通常从HTTP请求开始，然后转换为其他模式
      *
-     * @param status The event to process
-     *
-     * @return The state the caller should put the socket in when this method returns
-     *
-     * @throws IOException If an I/O error occurs during the processing of the request
+     * @param status 待处理的套接字事件
+     * @return 处理后的套接字状态
+     * @throws IOException 发生I/O异常时抛出
      */
     protected abstract SocketState dispatch(SocketEvent status) throws IOException;
 
     /**
-     * Calls the post process of the async state machine.
+     * 调用异步状态机的后处理方法
+     * 处理异步操作完成后的清理和状态转换工作
      *
-     * @return The state the caller should put the socket in when this method returns
+     * @return 处理后的套接字状态
      */
     protected abstract SocketState asyncPostProcess();
 
     /**
-     * @return the logger associated with this processor type
+     * 获取与当前处理器类型关联的日志记录器
+     *
+     * @return 日志记录器实例
      */
     protected abstract Log getLog();
 }

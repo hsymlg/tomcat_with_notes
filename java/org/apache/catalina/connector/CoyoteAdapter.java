@@ -1,18 +1,6 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：该文件由Apache软件基金会（ASF）授权，遵循Apache License 2.0协议。
+ * 未经授权不得擅自使用，如需获取更多信息请查看NOTICE文件或访问官网。
  */
 package org.apache.catalina.connector;
 
@@ -43,11 +31,7 @@ import org.apache.coyote.Adapter;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 import org.apache.tomcat.util.ExceptionUtils;
-import org.apache.tomcat.util.buf.B2CConverter;
-import org.apache.tomcat.util.buf.ByteChunk;
-import org.apache.tomcat.util.buf.CharChunk;
-import org.apache.tomcat.util.buf.HexUtils;
-import org.apache.tomcat.util.buf.MessageBytes;
+import org.apache.tomcat.util.buf.*;
 import org.apache.tomcat.util.http.ServerCookie;
 import org.apache.tomcat.util.http.ServerCookies;
 import org.apache.tomcat.util.net.SSLSupport;
@@ -56,61 +40,41 @@ import org.apache.tomcat.util.res.StringManager;
 
 
 /**
- * Implementation of a request processor which delegates the processing to a Coyote processor.
+ * CoyoteAdapter类实现：作为Coyote协议处理器与Tomcat容器之间的适配器，
+ * 负责将Coyote请求/响应转换为Servlet规范的Request/Response，并处理请求分发。
  *
- * @author Craig R. McClanahan
- * @author Remy Maucherat
+ * @author Craig R. McClanahan, Remy Maucherat 等开发者
  */
 public class CoyoteAdapter implements Adapter {
 
     private static final Log log = LogFactory.getLog(CoyoteAdapter.class);
 
-    // -------------------------------------------------------------- Constants
-
+    // 常量定义
     private static final String POWERED_BY = "Servlet/6.0 JSP/3.1 " + "(" + ServerInfo.getServerInfo() + " Java/" +
-            System.getProperty("java.vm.vendor") + "/" + System.getProperty("java.runtime.version") + ")";
-
+        System.getProperty("java.vm.vendor") + "/" + System.getProperty("java.runtime.version") + ")";
+    // 仅使用SSL进行会话跟踪的模式集合
     private static final EnumSet<SessionTrackingMode> SSL_ONLY = EnumSet.of(SessionTrackingMode.SSL);
-
+    // 适配器在请求/响应中的标记键
     public static final int ADAPTER_NOTES = 1;
 
 
-    // ----------------------------------------------------------- Constructors
-
-    /**
-     * Construct a new CoyoteProcessor associated with the specified connector.
-     *
-     * @param connector CoyoteConnector that owns this processor
-     */
+    // 构造函数：初始化适配器与Connector的关联
     public CoyoteAdapter(Connector connector) {
-
         super();
-        this.connector = connector;
-
+        this.connector = connector; // 保存所属的Connector引用
     }
 
 
-    // ----------------------------------------------------- Instance Variables
+    // 实例变量定义
+    private final Connector connector; // 关联的Connector对象
+    protected static final StringManager sm = StringManager.getManager(CoyoteAdapter.class); // 字符串资源管理器
 
 
-    /**
-     * The CoyoteConnector with which this processor is associated.
-     */
-    private final Connector connector;
-
-
-    /**
-     * The string manager for this package.
-     */
-    protected static final StringManager sm = StringManager.getManager(CoyoteAdapter.class);
-
-
-    // -------------------------------------------------------- Adapter Methods
-
+    // Adapter接口方法：处理异步请求分发
     @Override
     public boolean asyncDispatch(org.apache.coyote.Request req, org.apache.coyote.Response res, SocketEvent status)
-            throws Exception {
-
+        throws Exception {
+        // 获取包装后的Request/Response对象
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
 
@@ -119,71 +83,61 @@ public class CoyoteAdapter implements Adapter {
         }
 
         boolean success = true;
-        AsyncContextImpl asyncConImpl = request.getAsyncContextInternal();
+        AsyncContextImpl asyncConImpl = request.getAsyncContextInternal(); // 获取异步上下文
 
-        req.setRequestThread();
+        req.setRequestThread(); // 标记当前线程为处理请求的线程
 
         try {
             if (!request.isAsync()) {
-                // Error or timeout
-                // Lift any suspension (e.g. if sendError() was used by an async
-                // request) to allow the response to be written to the client
+                // 非异步请求时，取消响应挂起状态（如sendError后恢复）
                 response.setSuspended(false);
             }
 
             if (status == SocketEvent.TIMEOUT) {
+                // 处理超时事件：触发异步上下文超时逻辑
                 if (!asyncConImpl.timeout()) {
                     asyncConImpl.setErrorState(null, false);
                 }
             } else if (status == SocketEvent.ERROR) {
-                // An I/O error occurred on a non-container thread which means
-                // that the socket needs to be closed so set success as false to
-                // trigger a close
+                // 处理I/O错误：标记请求失败并通知监听器
                 success = false;
                 Throwable t = (Throwable) req.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
                 Context context = request.getContext();
                 ClassLoader oldCL = null;
                 try {
-                    oldCL = context.bind(false, null);
-                    if (req.getReadListener() != null) {
-                        req.getReadListener().onError(t);
-                    }
-                    if (res.getWriteListener() != null) {
-                        res.getWriteListener().onError(t);
-                    }
-                    res.action(ActionCode.CLOSE_NOW, t);
-                    asyncConImpl.setErrorState(t, true);
+                    oldCL = context.bind(false, null); // 绑定上下文类加载器
+                    // 通知读取/写入监听器发生错误
+                    if (req.getReadListener() != null) req.getReadListener().onError(t);
+                    if (res.getWriteListener() != null) res.getWriteListener().onError(t);
+                    res.action(ActionCode.CLOSE_NOW, t); // 立即关闭连接
+                    asyncConImpl.setErrorState(t, true); // 设置异步上下文错误状态
                 } finally {
-                    context.unbind(false, oldCL);
+                    context.unbind(false, oldCL); // 解除上下文类加载器绑定
                 }
             }
 
-            // Check to see if non-blocking writes or reads are being used
+            // 处理非阻塞读写事件（异步请求场景）
             if (!request.isAsyncDispatching() && request.isAsync()) {
                 WriteListener writeListener = res.getWriteListener();
                 ReadListener readListener = req.getReadListener();
                 if (writeListener != null && status == SocketEvent.OPEN_WRITE) {
+                    // 可写事件：触发写监听器处理
                     Context context = request.getContext();
                     ClassLoader oldCL = null;
                     try {
                         oldCL = context.bind(false, null);
-                        res.onWritePossible();
+                        res.onWritePossible(); // 通知写监听器可写
+                        // 若请求已完成且需要发送全部数据读取事件，通知读监听器
                         if (request.isFinished() && req.sendAllDataReadEvent() && readListener != null) {
                             readListener.onAllDataRead();
                         }
-                        // User code may have swallowed an IOException
+                        // 检查响应是否存在异常（用户代码可能已捕获）
                         if (response.getCoyoteResponse().isExceptionPresent()) {
                             throw response.getCoyoteResponse().getErrorException();
                         }
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
-                        // Allow the error handling to write to the response
-                        response.setSuspended(false);
-                        // Need to trigger the call to AbstractProcessor.setErrorState()
-                        // before the listener is called so the listener can call complete
-                        // Therefore no need to set success=false as that would trigger a
-                        // second call to AbstractProcessor.setErrorState()
-                        // https://bz.apache.org/bugzilla/show_bug.cgi?id=65001
+                        // 写监听器错误处理：通知监听器并关闭连接
                         writeListener.onError(t);
                         res.action(ActionCode.CLOSE_NOW, t);
                         asyncConImpl.setErrorState(t, true);
@@ -191,34 +145,23 @@ public class CoyoteAdapter implements Adapter {
                         context.unbind(false, oldCL);
                     }
                 } else if (readListener != null && status == SocketEvent.OPEN_READ) {
+                    // 可读事件：触发读监听器处理
                     Context context = request.getContext();
                     ClassLoader oldCL = null;
                     try {
                         oldCL = context.bind(false, null);
-                        // If data is being read on a non-container thread a
-                        // dispatch with status OPEN_READ will be used to get
-                        // execution back on a container thread for the
-                        // onAllDataRead() event. Therefore, make sure
-                        // onDataAvailable() is not called in this case.
-                        if (!request.isFinished()) {
-                            req.onDataAvailable();
-                        }
+                        // 若请求未完成，通知读监听器有数据可用
+                        if (!request.isFinished()) req.onDataAvailable();
                         if (request.isFinished() && req.sendAllDataReadEvent()) {
                             readListener.onAllDataRead();
                         }
-                        // User code may have swallowed an IOException
+                        // 检查请求是否存在异常
                         if (request.getCoyoteRequest().isExceptionPresent()) {
                             throw request.getCoyoteRequest().getErrorException();
                         }
                     } catch (Throwable t) {
                         ExceptionUtils.handleThrowable(t);
-                        // Allow the error handling to write to the response
-                        response.setSuspended(false);
-                        // Need to trigger the call to AbstractProcessor.setErrorState()
-                        // before the listener is called so the listener can call complete
-                        // Therefore no need to set success=false as that would trigger a
-                        // second call to AbstractProcessor.setErrorState()
-                        // https://bz.apache.org/bugzilla/show_bug.cgi?id=65001
+                        // 读监听器错误处理
                         readListener.onError(t);
                         res.action(ActionCode.CLOSE_NOW, t);
                         asyncConImpl.setErrorState(t, true);
@@ -228,51 +171,49 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
-            // Has an error occurred during async processing that needs to be
-            // processed by the application's error page mechanism (or Tomcat's
-            // if the application doesn't define one)?
+            // 处理异步请求中的错误，需要转发到错误页面
             if (!request.isAsyncDispatching() && request.isAsync() && response.isErrorReportRequired()) {
                 connector.getService().getContainer().getPipeline().getFirst().invoke(request, response);
             }
 
             if (request.isAsyncDispatching()) {
+                // 异步分发：调用容器管道处理请求
                 connector.getService().getContainer().getPipeline().getFirst().invoke(request, response);
                 if (response.isError()) {
+                    // 分发过程中发生错误，设置异步上下文错误状态
                     Throwable t = (Throwable) request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
                     asyncConImpl.setErrorState(t, true);
                 }
             }
 
             if (!request.isAsync()) {
+                // 非异步请求：完成请求处理
                 request.finishRequest();
                 response.finishResponse();
             }
 
-            // Check to see if the processor is in an error state. If it is,
-            // bail out now.
+            // 检查处理器是否处于错误状态
             AtomicBoolean error = new AtomicBoolean(false);
             res.action(ActionCode.IS_ERROR, error);
             if (error.get()) {
+                // 错误状态：触发异步后处理（若需要）
                 if (request.isAsyncCompleting() || request.isAsyncDispatching()) {
-                    // Connection will be forcibly closed which will prevent completion/dispatch happening at the usual
-                    // point. Trigger post-processing here.
                     res.action(ActionCode.ASYNC_POST_PROCESS, null);
                 }
                 success = false;
             }
         } catch (IOException e) {
-            success = false;
-            // Ignore
+            success = false; // 忽略IO异常，标记请求失败
         } catch (Throwable t) {
             ExceptionUtils.handleThrowable(t);
-            success = false;
+            success = false; // 其他错误，标记请求失败并记录日志
             log.error(sm.getString("coyoteAdapter.asyncDispatch"), t);
         } finally {
             if (!success) {
-                res.setStatus(500);
+                res.setStatus(500); // 错误时设置500状态码
             }
 
-            // Access logging
+            // 访问日志记录（非异步或失败时）
             if (!success || !request.isAsync()) {
                 long time = 0;
                 if (req.getStartTimeNanos() != -1) {
@@ -282,13 +223,14 @@ public class CoyoteAdapter implements Adapter {
                 if (context != null) {
                     context.logAccess(request, response, time, false);
                 } else {
-                    log(req, res, time);
+                    log(req, res, time); // 无上下文时直接记录日志
                 }
             }
 
+            // 清理线程名称和请求线程标记
             req.getRequestProcessor().setWorkerThreadName(null);
             req.clearRequestThread();
-            // Recycle the wrapper request and response
+            // 回收请求/响应对象（非异步或失败时）
             if (!success || !request.isAsync()) {
                 updateWrapperErrorCount(request, response);
                 request.recycle();
@@ -299,56 +241,52 @@ public class CoyoteAdapter implements Adapter {
     }
 
 
+    // Adapter接口方法：处理标准请求服务
     @Override
     public void service(org.apache.coyote.Request req, org.apache.coyote.Response res) throws Exception {
-
+        // 获取或创建包装后的Request/Response对象
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
 
         if (request == null) {
-            // Create objects
+            // 首次请求时创建对象并建立关联
             request = connector.createRequest();
             request.setCoyoteRequest(req);
             response = connector.createResponse();
             response.setCoyoteResponse(res);
-
-            // Link objects
             request.setResponse(response);
             response.setRequest(request);
-
-            // Set as notes
             req.setNote(ADAPTER_NOTES, request);
             res.setNote(ADAPTER_NOTES, response);
-
-            // Set query string encoding
+            // 设置查询字符串编码
             req.getParameters().setQueryStringCharset(connector.getURICharset());
         }
 
         if (connector.getXpoweredBy()) {
+            // 添加X-Powered-By响应头（若启用）
             response.addHeader("X-Powered-By", POWERED_BY);
         }
 
         boolean async = false;
         boolean postParseSuccess = false;
 
-        req.setRequestThread();
+        req.setRequestThread(); // 标记当前线程为请求处理线程
 
         try {
-            // Parse and set Catalina and configuration specific
-            // request parameters
+            // 解析请求并设置容器相关参数
             postParseSuccess = postParseRequest(req, request, res, response);
             if (postParseSuccess) {
-                // check valves if we support async
+                // 检查容器是否支持异步请求
                 request.setAsyncSupported(connector.getService().getContainer().getPipeline().isAsyncSupported());
-                // Calling the container
+                // 调用容器管道处理请求
                 connector.getService().getContainer().getPipeline().getFirst().invoke(request, response);
             }
             if (request.isAsync()) {
+                // 异步请求处理
                 async = true;
                 ReadListener readListener = req.getReadListener();
                 if (readListener != null && request.isFinished()) {
-                    // Possible the all data may have been read during service()
-                    // method so this needs to be checked here
+                    // 请求完成时通知读监听器
                     ClassLoader oldCL = null;
                     try {
                         oldCL = request.getContext().bind(false, null);
@@ -361,50 +299,38 @@ public class CoyoteAdapter implements Adapter {
                 }
 
                 Throwable throwable = (Throwable) request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
-
-                // If an async request was started, is not going to end once
-                // this container thread finishes and an error occurred, trigger
-                // the async error process
+                // 异步请求中发生错误且未完成时，触发错误处理
                 if (!request.isAsyncCompleting() && throwable != null) {
                     request.getAsyncContextInternal().setErrorState(throwable, true);
                 }
             } else {
+                // 非异步请求：完成请求处理
                 request.finishRequest();
                 response.finishResponse();
             }
 
         } catch (IOException e) {
-            // Ignore
+            // 忽略IO异常（由finally块处理）
         } finally {
+            // 检查响应是否处于错误状态
             AtomicBoolean error = new AtomicBoolean(false);
             res.action(ActionCode.IS_ERROR, error);
 
             if (request.isAsyncCompleting() && error.get()) {
-                // Connection will be forcibly closed which will prevent
-                // completion happening at the usual point. Need to trigger
-                // call to onComplete() here.
+                // 异步完成时发生错误：触发后处理并关闭连接
                 res.action(ActionCode.ASYNC_POST_PROCESS, null);
                 async = false;
             }
 
-            // Access log
+            // 访问日志记录（非异步且解析成功时）
             if (!async && postParseSuccess) {
-                // Log only if processing was invoked.
-                // If postParseRequest() failed, it has already logged it.
-                Context context = request.getContext();
-                Host host = request.getHost();
-                // If the context is null, it is likely that the endpoint was
-                // shutdown, this connection closed and the request recycled in
-                // a different thread. That thread will have updated the access
-                // log so it is OK not to update the access log here in that
-                // case.
-                // The other possibility is that an error occurred early in
-                // processing and the request could not be mapped to a Context.
-                // Log via the host or engine in that case.
                 long time = System.nanoTime() - req.getStartTimeNanos();
+                Context context = request.getContext();
                 if (context != null) {
                     context.logAccess(request, response, time, false);
                 } else if (response.isError()) {
+                    // 无上下文时通过主机或容器记录日志
+                    Host host = request.getHost();
                     if (host != null) {
                         host.logAccess(request, response, time, false);
                     } else {
@@ -413,10 +339,10 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
+            // 清理线程相关资源
             req.getRequestProcessor().setWorkerThreadName(null);
             req.clearRequestThread();
-
-            // Recycle the wrapper request and response
+            // 回收请求/响应对象（非异步时）
             if (!async) {
                 updateWrapperErrorCount(request, response);
                 request.recycle();
@@ -426,6 +352,7 @@ public class CoyoteAdapter implements Adapter {
     }
 
 
+    // 更新Wrapper错误计数（响应错误时）
     private void updateWrapperErrorCount(Request request, Response response) {
         if (response.isError()) {
             Wrapper wrapper = request.getWrapper();
@@ -436,44 +363,38 @@ public class CoyoteAdapter implements Adapter {
     }
 
 
+    // Adapter接口方法：准备请求处理（解析后验证）
     @Override
     public boolean prepare(org.apache.coyote.Request req, org.apache.coyote.Response res)
-            throws IOException, ServletException {
+        throws IOException, ServletException {
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
-
-        return postParseRequest(req, request, res, response);
+        return postParseRequest(req, request, res, response); // 调用请求解析后处理
     }
 
 
+    // Adapter接口方法：记录访问日志
     @Override
     public void log(org.apache.coyote.Request req, org.apache.coyote.Response res, long time) {
-
+        // 获取或创建包装后的请求/响应对象
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
 
         if (request == null) {
-            // Create objects
+            // 首次调用时创建对象并建立关联
             request = connector.createRequest();
             request.setCoyoteRequest(req);
             response = connector.createResponse();
             response.setCoyoteResponse(res);
-
-            // Link objects
             request.setResponse(response);
             response.setRequest(request);
-
-            // Set as notes
             req.setNote(ADAPTER_NOTES, request);
             res.setNote(ADAPTER_NOTES, response);
-
-            // Set query string encoding
             req.getParameters().setQueryStringCharset(connector.getURICharset());
         }
 
         try {
-            // Log at the lowest level available. logAccess() will be
-            // automatically called on parent containers.
+            // 记录访问日志（最低级别，由父容器处理）
             boolean logged = false;
             Context context = request.mappingData.context;
             Host host = request.mappingData.host;
@@ -489,42 +410,43 @@ public class CoyoteAdapter implements Adapter {
             }
         } catch (Throwable t) {
             ExceptionUtils.handleThrowable(t);
-            log.warn(sm.getString("coyoteAdapter.accesslogFail"), t);
+            log.warn(sm.getString("coyoteAdapter.accesslogFail"), t); // 日志记录失败时警告
         } finally {
             updateWrapperErrorCount(request, response);
             request.recycle();
-            response.recycle();
+            response.recycle(); // 回收对象
         }
     }
-
 
     private static class RecycleRequiredException extends Exception {
         private static final long serialVersionUID = 1L;
     }
 
+    // 检查请求/响应是否已回收（防止重复使用）
     @Override
     public void checkRecycled(org.apache.coyote.Request req, org.apache.coyote.Response res) {
         Request request = (Request) req.getNote(ADAPTER_NOTES);
         Response response = (Response) res.getNote(ADAPTER_NOTES);
         String messageKey = null;
+
+        // 检查请求或响应是否存在异常使用情况
         if (request != null && request.getHost() != null) {
             messageKey = "coyoteAdapter.checkRecycled.request";
         } else if (response != null && response.getContentWritten() != 0) {
             messageKey = "coyoteAdapter.checkRecycled.response";
         }
+
         if (messageKey != null) {
-            // Log this request, as it has probably skipped the access log.
-            // The log() method will take care of recycling.
+            // 记录可能未正常回收的请求/响应，并触发日志记录（会自动回收）
             log(req, res, 0L);
 
             if (connector.getState().isAvailable()) {
+                // 连接器正常运行时，记录信息级日志
                 if (log.isInfoEnabled()) {
                     log.info(sm.getString(messageKey), new RecycleRequiredException());
                 }
             } else {
-                // There may be some aborted requests.
-                // When connector shuts down, the request and response will not
-                // be reused, so there is no issue to warn about here.
+                // 连接器关闭时，仅记录调试级日志（可能存在中止的请求）
                 if (log.isDebugEnabled()) {
                     log.debug(sm.getString(messageKey), new RecycleRequiredException());
                 }
@@ -535,52 +457,31 @@ public class CoyoteAdapter implements Adapter {
 
     @Override
     public String getDomain() {
-        return connector.getDomain();
+        return connector.getDomain(); // 返回连接器关联的域名
     }
 
 
-    // ------------------------------------------------------ Protected Methods
-
-    /**
-     * Perform the necessary processing after the HTTP headers have been parsed to enable the request/response pair to
-     * be passed to the start of the container pipeline for processing.
-     *
-     * @param req      The coyote request object
-     * @param request  The catalina request object
-     * @param res      The coyote response object
-     * @param response The catalina response object
-     *
-     * @return <code>true</code> if the request should be passed on to the start of the container pipeline, otherwise
-     *             <code>false</code>
-     *
-     * @throws IOException      If there is insufficient space in a buffer while processing headers
-     * @throws ServletException If the supported methods of the target servlet cannot be determined
-     */
+    // 核心方法：请求解析后处理（关键处理逻辑）
     @SuppressWarnings("deprecation")
     protected boolean postParseRequest(org.apache.coyote.Request req, Request request, org.apache.coyote.Response res,
-            Response response) throws IOException, ServletException {
+                                       Response response) throws IOException, ServletException {
 
-        // If the processor has set the scheme (AJP does this, HTTP does this if
-        // SSL is enabled) use this to set the secure flag as well. If the
-        // processor hasn't set it, use the settings from the connector
+        // 设置请求协议和安全标志（优先使用处理器设置，否则用连接器配置）
         if (req.scheme().isNull()) {
-            // Use connector scheme and secure configuration, (defaults to
-            // "http" and false respectively)
             req.scheme().setString(connector.getScheme());
             request.setSecure(connector.getSecure());
         } else {
-            // Use processor specified scheme to determine secure state
+            // 使用处理器指定的协议确定安全状态
             request.setSecure(req.scheme().equals("https"));
         }
 
-        // At this point the Host header has been processed.
-        // Override if the proxyPort/proxyHost are set
+        // 处理代理设置：覆盖服务器名称和端口（如果配置了代理）
         String proxyName = connector.getProxyName();
         int proxyPort = connector.getProxyPort();
         if (proxyPort != 0) {
             req.setServerPort(proxyPort);
         } else if (req.getServerPort() == -1) {
-            // Not explicitly set. Use default ports based on the scheme
+            // 未明确设置端口时，使用协议默认端口
             if (req.scheme().equals("https")) {
                 req.setServerPort(443);
             } else {
@@ -593,142 +494,121 @@ public class CoyoteAdapter implements Adapter {
 
         MessageBytes undecodedURI = req.requestURI();
 
-        // Check for ping OPTIONS * request
+        // 处理特殊请求：ping OPTIONS * 请求（用于检查服务器可用性）
         if (undecodedURI.equals("*")) {
             if (req.method().equals("OPTIONS")) {
+                // 构建允许的HTTP方法列表
                 StringBuilder allow = new StringBuilder();
                 allow.append("GET, HEAD, POST, PUT, DELETE, OPTIONS");
-                // Trace if allowed
+                // 如果允许TRACE方法，则添加
                 if (connector.getAllowTrace()) {
                     allow.append(", TRACE");
                 }
                 res.setHeader("Allow", allow.toString());
-                // Access log entry as processing won't reach AccessLogValve
+                // 直接记录访问日志（不通过AccessLogValve）
                 connector.getService().getContainer().logAccess(request, response, 0, true);
                 return false;
             } else {
+                // 无效的请求方法，返回400错误
                 response.sendError(400, sm.getString("coyoteAdapter.invalidURI"));
             }
         }
 
         MessageBytes decodedURI = req.decodedURI();
 
-        // Filter CONNECT method
+        // 过滤CONNECT方法（不支持）
         if (req.method().equals("CONNECT")) {
             response.sendError(HttpServletResponse.SC_NOT_IMPLEMENTED, sm.getString("coyoteAdapter.connect"));
         } else {
-            // No URI for CONNECT requests
+            // 非CONNECT请求处理URI
             if (undecodedURI.getType() == MessageBytes.T_BYTES) {
+                // 检查可疑URI（如果配置了拒绝策略）
                 if (connector.getRejectSuspiciousURIs()) {
                     if (checkSuspiciousURIs(undecodedURI.getByteChunk())) {
                         response.sendError(400, sm.getString("coyoteAdapter.invalidURI"));
                     }
                 }
 
-                // Copy the raw URI to the decodedURI
+                // 复制原始URI到解码URI
                 decodedURI.duplicate(undecodedURI);
 
-                // Parse (and strip out) the path parameters
+                // 解析并提取路径参数（如分号后的参数）
                 parsePathParameters(req, request);
 
-                // URI decoding
-                // %xx decoding of the URL
+                // URI解码处理：
+                // 1. 处理%xx格式的编码
                 try {
                     req.getURLDecoder().convert(decodedURI.getByteChunk(),
-                            connector.getEncodedSolidusHandlingInternal(),
-                            connector.getEncodedReverseSolidusHandlingInternal());
+                        connector.getEncodedSolidusHandlingInternal(),
+                        connector.getEncodedReverseSolidusHandlingInternal());
                 } catch (IOException ioe) {
                     response.sendError(400, sm.getString("coyoteAdapter.invalidURIWithMessage", ioe.getMessage()));
                 }
-                // Normalization
+
+                // 2. 路径规范化（处理../、./等）
                 if (normalize(req.decodedURI(), connector.getAllowBackslash())) {
-                    // Character decoding
+                    // 3. 字符解码（将字节转换为字符）
                     convertURI(decodedURI, request);
-                    // URIEncoding values are limited to US-ASCII supersets.
-                    // Therefore, it is not necessary to check that the URI remains
-                    // normalized after character decoding
+                    // 由于URIEncoding为US-ASCII超集，字符解码后无需再次检查规范化
                 } else {
+                    // 规范化失败，返回400错误
                     response.sendError(400, sm.getString("coyoteAdapter.invalidURI"));
                 }
             } else {
-                /*
-                 * The URI is chars or String, and has been sent using an in-memory protocol handler. The following
-                 * assumptions are made:
-                 *
-                 * - req.requestURI() has been set to the 'original' non-decoded, non-normalized URI that includes path
-                 * parameters (if any)
-                 *
-                 * - req.decodedURI() has been set to the decoded, normalized form of req.requestURI() with any path
-                 * parameters removed
-                 *
-                 * - 'suspicious' URI filtering, if required, has already been performed
-                 */
+                // 对于字符或字符串类型的URI（内存协议处理器），假设已完成解码和规范化
                 decodedURI.toChars();
             }
         }
 
-        // Request mapping.
+        // 请求映射：确定请求的目标主机和上下文
         MessageBytes serverName;
         if (connector.getUseIPVHosts()) {
             serverName = req.localName();
             if (serverName.isNull()) {
-                // well, they did ask for it
+                // 获取本地名称（如果启用了IPVHosts）
                 res.action(ActionCode.REQ_LOCAL_NAME_ATTRIBUTE, null);
             }
         } else {
             serverName = req.serverName();
         }
 
-        // Version for the second mapping loop and
-        // Context that we expect to get for that version
+        // 版本映射相关变量（处理不同版本的上下文）
         String version = null;
         Context versionContext = null;
         boolean mapRequired = true;
 
         if (response.isError()) {
-            // An error this early means the URI is invalid. Ensure invalid data
-            // is not passed to the mapper. Note we still want the mapper to
-            // find the correct host.
+            // 如果响应已处于错误状态，清空URI（防止无效数据传递给映射器）
             decodedURI.recycle();
         }
 
+        // 循环处理映射请求（可能需要多次映射以找到正确的上下文）
         while (mapRequired) {
-            // This will map the latest version by default
+            // 使用映射器映射请求到目标主机、上下文和Servlet
             connector.getService().getMapper().map(serverName, decodedURI, version, request.getMappingData());
 
-            // If there is no context at this point, either this is a 404
-            // because no ROOT context has been deployed or the URI was invalid
-            // so no context could be mapped.
+            // 如果未找到上下文，可能是404错误或URI无效
             if (request.getContext() == null) {
-                // Allow processing to continue.
-                // If present, the rewrite Valve may rewrite this to a valid
-                // request.
-                // The StandardEngineValve will handle the case of a missing
-                // Host and the StandardHostValve the case of a missing Context.
-                // If present, the error reporting valve will provide a response
-                // body.
+                // 允许继续处理，可能由Rewrite Valve重写为有效请求
+                // 或由StandardEngineValve/StandardHostValve处理缺失的主机/上下文
                 return true;
             }
 
-            // Now we have the context, we can parse the session ID from the URL
-            // (if any). Need to do this before we redirect in case we need to
-            // include the session id in the redirect
-            String sessionID;
+            // 解析URL中的会话ID（如果启用了URL会话跟踪）
             if (request.getServletContext().getEffectiveSessionTrackingModes().contains(SessionTrackingMode.URL)) {
-
-                // Get the session ID if there was one
-                sessionID = request.getPathParameter(SessionConfig.getSessionUriParamName(request.getContext()));
+                // 获取会话ID参数（如果存在）
+                String sessionID = request.getPathParameter(SessionConfig.getSessionUriParamName(request.getContext()));
                 if (sessionID != null) {
                     request.setRequestedSessionId(sessionID);
                     request.setRequestedSessionURL(true);
                 }
             }
 
-            // Look for session ID in cookies and SSL session
+            // 从Cookie和SSL会话中查找会话ID
             try {
                 parseSessionCookiesId(request);
             } catch (IllegalArgumentException e) {
-                // Too many cookies
+                // 处理Cookie过多的情况
                 if (!response.isError()) {
                     response.setError();
                     response.sendError(400, e.getMessage());
@@ -737,36 +617,29 @@ public class CoyoteAdapter implements Adapter {
             }
             parseSessionSslId(request);
 
-            sessionID = request.getRequestedSessionId();
+            String sessionID = request.getRequestedSessionId();
 
             mapRequired = false;
             if (version != null && request.getContext() == versionContext) {
-                // We got the version that we asked for. That is it.
+                // 已找到指定版本的上下文，结束映射
             } else {
                 version = null;
                 versionContext = null;
 
+                // 处理多版本上下文的会话映射
                 Context[] contexts = request.getMappingData().contexts;
-                // Single contextVersion means no need to remap
-                // No session ID means no possibility of remap
                 if (contexts != null && sessionID != null) {
-                    // Find the context associated with the session
+                    // 查找与会话ID关联的上下文
                     for (int i = contexts.length; i > 0; i--) {
                         Context ctxt = contexts[i - 1];
                         if (ctxt.getManager().findSession(sessionID) != null) {
-                            // We found a context. Is it the one that has
-                            // already been mapped?
+                            // 找到匹配的上下文，但不是当前映射的上下文，需要重新映射
                             if (!ctxt.equals(request.getMappingData().context)) {
-                                // Set version so second time through mapping
-                                // the correct context is found
                                 version = ctxt.getWebappVersion();
                                 versionContext = ctxt;
-                                // Reset mapping
-                                request.getMappingData().recycle();
+                                request.getMappingData().recycle(); // 重置映射数据
                                 mapRequired = true;
-                                // Recycle cookies and session info in case the
-                                // correct context is configured with different
-                                // settings
+                                // 重置会话和Cookie信息（可能新上下文配置不同）
                                 request.recycleSessionInfo();
                                 request.recycleCookieInfo(true);
                             }
@@ -776,53 +649,49 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
+            // 检查上下文是否暂停（暂停时需要重新映射）
             if (!mapRequired && request.getContext().getPaused()) {
-                // Found a matching context but it is paused. Mapping data will
-                // be wrong since some Wrappers may not be registered at this
-                // point.
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(1000); // 等待1秒
                 } catch (InterruptedException e) {
-                    // Should never happen
+                    // 不应该发生中断
                 }
-                // Reset mapping
-                request.getMappingData().recycle();
+                request.getMappingData().recycle(); // 重置映射
                 mapRequired = true;
             }
         }
 
-        // Possible redirect
+        // 处理可能的重定向（如路径规范化需要）
         MessageBytes redirectPathMB = request.getMappingData().redirectPath;
         if (!redirectPathMB.isNull()) {
+            // 构建重定向URL（编码路径和添加会话ID）
             String redirectPath = URLEncoder.DEFAULT.encode(redirectPathMB.toString(), StandardCharsets.UTF_8);
             String query = request.getQueryString();
             if (request.isRequestedSessionIdFromURL()) {
-                // This is not optimal, but as this is not very common, it
-                // shouldn't matter
+                // 添加会话ID参数
                 redirectPath = redirectPath + ";" + SessionConfig.getSessionUriParamName(request.getContext()) + "=" +
-                        request.getRequestedSessionId();
+                    request.getRequestedSessionId();
             }
             if (query != null) {
-                // This is not optimal, but as this is not very common, it
-                // shouldn't matter
+                // 添加查询字符串
                 redirectPath = redirectPath + "?" + query;
             }
+            // 发送重定向响应
             response.sendRedirect(redirectPath);
             request.getContext().logAccess(request, response, 0, true);
             return false;
         }
 
-        // Filter TRACE method
+        // 过滤TRACE方法（如果不允许）
         if (!connector.getAllowTrace() && req.method().equals("TRACE")) {
             Wrapper wrapper = request.getWrapper();
             StringBuilder header = null;
             if (wrapper != null) {
+                // 获取Servlet支持的方法
                 String[] methods = wrapper.getServletMethods();
                 if (methods != null) {
                     for (String method : methods) {
-                        if ("TRACE".equals(method)) {
-                            continue;
-                        }
+                        if ("TRACE".equals(method)) continue;
                         if (header == null) {
                             header = new StringBuilder(method);
                         } else {
@@ -834,46 +703,44 @@ public class CoyoteAdapter implements Adapter {
             if (header != null) {
                 res.addHeader("Allow", header.toString());
             }
+            // 不允许TRACE方法，返回405错误
             response.sendError(405, sm.getString("coyoteAdapter.trace"));
-            // Safe to skip the remainder of this method.
             return true;
         }
 
+        // 执行连接器级别的认证和授权
         doConnectorAuthenticationAuthorization(req, request);
 
         return true;
     }
 
 
+    // 执行连接器级别的认证和授权
     private void doConnectorAuthenticationAuthorization(org.apache.coyote.Request req, Request request) {
-        // Set the remote principal
+        // 设置远程用户主体
         String username = req.getRemoteUser().toString();
         if (username != null) {
             if (log.isDebugEnabled()) {
                 log.debug(sm.getString("coyoteAdapter.authenticate", username));
             }
             if (req.getRemoteUserNeedsAuthorization()) {
+                // 需要授权：通过验证器进行授权
                 Authenticator authenticator = request.getContext().getAuthenticator();
                 if (!(authenticator instanceof AuthenticatorBase)) {
+                    // 自定义验证器可能不会触发授权，这里手动执行
                     if (log.isDebugEnabled()) {
                         log.debug(sm.getString("coyoteAdapter.authorize", username));
                     }
-                    // Custom authenticator that may not trigger authorization.
-                    // Do the authorization here to make sure it is done.
                     request.setUserPrincipal(request.getContext().getRealm().authenticate(username));
                 }
-                // If the Authenticator is an instance of AuthenticatorBase then
-                // it will check req.getRemoteUserNeedsAuthorization() and
-                // trigger authorization as necessary. It will also cache the
-                // result preventing excessive calls to the Realm.
+                // 如果是AuthenticatorBase的实例，它会在适当的时候检查并触发授权
             } else {
-                // The connector isn't configured for authorization. Create a
-                // user without any roles using the supplied username.
+                // 连接器未配置授权：创建无角色的用户主体
                 request.setUserPrincipal(new CoyotePrincipal(username));
             }
         }
 
-        // Set the authorization type
+        // 设置认证类型
         String authType = req.getAuthType().toString();
         if (authType != null) {
             request.setAuthType(authType);
@@ -882,31 +749,22 @@ public class CoyoteAdapter implements Adapter {
 
 
     /**
-     * Extract the path parameters from the request. This assumes parameters are of the form
-     * /path;name=value;name2=value2/ etc. Currently only really interested in the session ID that will be in this form.
-     * Other parameters can safely be ignored.
-     *
-     * @param req     The Coyote request object
-     * @param request The Servlet request object
+     * 解析请求路径中的参数（如/path;param=value形式）
+     * 主要关注会话ID参数，其他参数会被忽略
      */
     protected void parsePathParameters(org.apache.coyote.Request req, Request request) {
-
-        // Process in bytes (this is default format so this is normally a NO-OP
+        // 处理字节形式的URI（默认格式）
         req.decodedURI().toBytes();
 
         ByteChunk uriBC = req.decodedURI().getByteChunk();
-        // The first character must always be '/' so start search at position 1.
-        // If the first character is ';' the URI will be rejected at the
-        // normalization stage
+        // 从位置1开始查找分号（第一个字符必须是'/'）
         int semicolon = uriBC.indexOf(';', 1);
-        // Performance optimisation. Return as soon as it is known there are no
-        // path parameters;
+        // 性能优化：无分号则直接返回（无路径参数）
         if (semicolon == -1) {
             return;
         }
 
-        // What encoding to use? Some platforms, eg z/os, use a default
-        // encoding that doesn't give the expected result so be explicit
+        // 使用明确的字符集（避免平台默认编码问题）
         Charset charset = connector.getURICharset();
 
         if (log.isTraceEnabled()) {
@@ -915,28 +773,30 @@ public class CoyoteAdapter implements Adapter {
             log.trace(sm.getString("coyoteAdapter.debug", "enc", charset.name()));
         }
 
+        // 循环处理所有路径参数
         while (semicolon > -1) {
-            // Parse path param, and extract it from the decoded request URI
             int start = uriBC.getStart();
             int end = uriBC.getEnd();
 
             int pathParamStart = semicolon + 1;
             int pathParamEnd =
-                    ByteChunk.findBytes(uriBC.getBuffer(), start + pathParamStart, end, new byte[] { ';', '/' });
+                ByteChunk.findBytes(uriBC.getBuffer(), start + pathParamStart, end, new byte[] { ';', '/' });
 
             String pv = null;
 
             if (pathParamEnd >= 0) {
+                // 提取路径参数并从URI中移除
                 if (charset != null) {
                     pv = new String(uriBC.getBuffer(), start + pathParamStart, pathParamEnd - pathParamStart, charset);
                 }
-                // Extract path param from decoded request URI
+                // 从URI中移除参数部分
                 byte[] buf = uriBC.getBuffer();
                 for (int i = 0; i < end - start - pathParamEnd; i++) {
                     buf[start + semicolon + i] = buf[start + i + pathParamEnd];
                 }
                 uriBC.setBytes(buf, start, end - start - pathParamEnd + semicolon);
             } else {
+                // 参数位于URI末尾
                 if (charset != null) {
                     pv = new String(uriBC.getBuffer(), start + pathParamStart, (end - start) - pathParamStart, charset);
                 }
@@ -950,6 +810,7 @@ public class CoyoteAdapter implements Adapter {
             }
 
             if (pv != null) {
+                // 解析参数名和值（格式：name=value）
                 int equals = pv.indexOf('=');
                 if (equals > -1) {
                     String name = pv.substring(0, equals);
@@ -963,20 +824,20 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
+            // 继续查找下一个分号
             semicolon = uriBC.indexOf(';', semicolon);
         }
     }
 
 
     /**
-     * Look for SSL session ID if required. Only look for SSL Session ID if it is the only tracking method enabled.
-     *
-     * @param request The Servlet request object
+     * 从SSL会话中查找会话ID（仅当SSL是唯一跟踪模式时）
      */
     protected void parseSessionSslId(Request request) {
         if (request.getRequestedSessionId() == null &&
-                SSL_ONLY.equals(request.getServletContext().getEffectiveSessionTrackingModes()) &&
-                request.connector.secure) {
+            SSL_ONLY.equals(request.getServletContext().getEffectiveSessionTrackingModes()) &&
+            request.connector.secure) {
+            // 从请求属性中获取SSL会话ID
             String sessionId = (String) request.getAttribute(SSLSupport.SESSION_ID_KEY);
             if (sessionId != null) {
                 request.setRequestedSessionId(sessionId);
@@ -987,23 +848,17 @@ public class CoyoteAdapter implements Adapter {
 
 
     /**
-     * Parse session id in Cookie.
-     *
-     * @param request The Servlet request object
+     * 从Cookie中解析会话ID
      */
     protected void parseSessionCookiesId(Request request) {
-
-        // If session tracking via cookies has been disabled for the current
-        // context, don't go looking for a session ID in a cookie as a cookie
-        // from a parent context with a session ID may be present which would
-        // overwrite the valid session ID encoded in the URL
+        // 如果当前上下文禁用了Cookie会话跟踪，则不处理
         Context context = request.getMappingData().context;
         if (context != null &&
-                !context.getServletContext().getEffectiveSessionTrackingModes().contains(SessionTrackingMode.COOKIE)) {
+            !context.getServletContext().getEffectiveSessionTrackingModes().contains(SessionTrackingMode.COOKIE)) {
             return;
         }
 
-        // Parse session id from cookies
+        // 从Cookie中解析会话ID
         ServerCookies serverCookies = request.getServerCookies();
         int count = serverCookies.getCookieCount();
         if (count <= 0) {
@@ -1015,9 +870,9 @@ public class CoyoteAdapter implements Adapter {
         for (int i = 0; i < count; i++) {
             ServerCookie scookie = serverCookies.getCookie(i);
             if (scookie.getName().equals(sessionCookieName)) {
-                // Override anything requested in the URL
+                // 覆盖URL中请求的会话ID（如果存在）
                 if (!request.isRequestedSessionIdFromCookie()) {
-                    // Accept only the first session id cookie
+                    // 仅接受第一个会话ID Cookie
                     convertMB(scookie.getValue());
                     request.setRequestedSessionId(scookie.getValue().toString());
                     request.setRequestedSessionCookie(true);
@@ -1027,27 +882,20 @@ public class CoyoteAdapter implements Adapter {
                     }
                 } else {
                     if (!request.isRequestedSessionIdValid()) {
-                        // Replace the session id until one is valid
+                        // 会话ID无效时，用后续Cookie中的ID替换
                         convertMB(scookie.getValue());
                         request.setRequestedSessionId(scookie.getValue().toString());
                     }
                 }
             }
         }
-
     }
 
 
     /**
-     * Character conversion of the URI.
-     *
-     * @param uri     MessageBytes object containing the URI
-     * @param request The Servlet request object
-     *
-     * @throws IOException if a IO exception occurs sending an error to the client
+     * 将URI从字节转换为字符（使用指定字符集）
      */
     protected void convertURI(MessageBytes uri, Request request) throws IOException {
-
         ByteChunk bc = uri.getByteChunk();
         int length = bc.getLength();
         CharChunk cc = uri.getCharChunk();
@@ -1055,6 +903,7 @@ public class CoyoteAdapter implements Adapter {
 
         Charset charset = connector.getURICharset();
 
+        // 获取或创建字符转换器
         B2CConverter conv = request.getURIConverter();
         if (conv == null) {
             conv = new B2CConverter(charset, false);
@@ -1064,24 +913,21 @@ public class CoyoteAdapter implements Adapter {
         }
 
         try {
+            // 执行字节到字符的转换
             conv.convert(bc, cc, true);
             uri.setChars(cc.getBuffer(), cc.getStart(), cc.getLength());
         } catch (IOException ioe) {
-            // Should never happen as B2CConverter should replace
-            // problematic characters
+            // 转换失败，返回400错误
             request.getResponse().sendError(HttpServletResponse.SC_BAD_REQUEST);
         }
     }
 
 
     /**
-     * Character conversion of the US-ASCII MessageBytes.
-     *
-     * @param mb The MessageBytes instance containing the bytes that should be converted to chars
+     * 将US-ASCII编码的MessageBytes转换为字符
      */
     protected void convertMB(MessageBytes mb) {
-
-        // This is of course only meaningful for bytes
+        // 仅处理字节类型的MessageBytes
         if (mb.getType() != MessageBytes.T_BYTES) {
             return;
         }
@@ -1091,7 +937,7 @@ public class CoyoteAdapter implements Adapter {
         int length = bc.getLength();
         cc.allocate(length, -1);
 
-        // Default encoding: fast conversion
+        // 快速转换（默认编码）
         byte[] bbuf = bc.getBuffer();
         char[] cbuf = cc.getBuffer();
         int start = bc.getStart();
@@ -1099,41 +945,34 @@ public class CoyoteAdapter implements Adapter {
             cbuf[i] = (char) (bbuf[i + start] & 0xff);
         }
         mb.setChars(cbuf, 0, length);
-
     }
 
 
     /**
-     * This method normalizes "\", "//", "/./" and "/../".
+     * 规范化URI路径（处理"\", "//", "/./", "/../"等特殊情况）
      *
-     * @param uriMB          URI to be normalized
-     * @param allowBackslash <code>true</code> if backslash characters are allowed in URLs
-     *
-     * @return <code>false</code> if normalizing this URI would require going above the root, or if the URI contains a
-     *             null byte, otherwise <code>true</code>
+     * @return false表示规范化会导致路径超出根目录或包含空字节，否则返回true
      */
     public static boolean normalize(MessageBytes uriMB, boolean allowBackslash) {
-
         ByteChunk uriBC = uriMB.getByteChunk();
         final byte[] b = uriBC.getBytes();
         final int start = uriBC.getStart();
         int end = uriBC.getEnd();
         boolean appendedSlash = false;
 
-        // An empty URL is not acceptable
+        // 空URL是不可接受的
         if (start == end) {
             return false;
         }
 
-        // The URL must start with '/' (or '\' that will be replaced soon)
+        // URL必须以'/'或'\'开头（'\'会被替换为'/'）
         if (b[start] != (byte) '/' && b[start] != (byte) '\\') {
             return false;
         }
 
         int pos;
 
-        // Replace '\' with '/'
-        // Check for null byte
+        // 替换'\'为'/'，检查空字节
         for (pos = start; pos < end; pos++) {
             if (b[pos] == (byte) '\\') {
                 if (allowBackslash) {
@@ -1146,7 +985,7 @@ public class CoyoteAdapter implements Adapter {
             }
         }
 
-        // Replace "//" with "/"
+        // 替换"//"为"/"
         for (pos = start; pos < (end - 1); pos++) {
             if (b[pos] == (byte) '/') {
                 while ((pos + 1 < end) && (b[pos + 1] == (byte) '/')) {
@@ -1156,9 +995,7 @@ public class CoyoteAdapter implements Adapter {
             }
         }
 
-        // If the URI ends with "/." or "/..", then we append an extra "/"
-        // Note: It is possible to extend the URI by 1 without any side effect
-        // as the next character is a non-significant WS.
+        // 处理以"/."或"/.."结尾的URI（添加额外的'/'）
         if (((end - start) >= 2) && (b[end - 1] == (byte) '.')) {
             if ((b[end - 2] == (byte) '/') || ((b[end - 2] == (byte) '.') && (b[end - 3] == (byte) '/'))) {
                 b[end] = (byte) '/';
@@ -1171,12 +1008,13 @@ public class CoyoteAdapter implements Adapter {
 
         int index = 0;
 
-        // Resolve occurrences of "/./" in the normalized path
+        // 处理"/./"情况（移除中间的"./"）
         while (true) {
             index = uriBC.indexOf("/./", 0, 3, index);
             if (index < 0) {
                 break;
             }
+            // 移除"/./"中的"./"
             copyBytes(b, start + index, start + index + 2, end - start - index - 2);
             end = end - 2;
             uriBC.setEnd(end);
@@ -1184,30 +1022,31 @@ public class CoyoteAdapter implements Adapter {
 
         index = 0;
 
-        // Resolve occurrences of "/../" in the normalized path
+        // 处理"/../"情况（移除上级目录引用）
         while (true) {
             index = uriBC.indexOf("/../", 0, 4, index);
             if (index < 0) {
                 break;
             }
-            // Prevent from going outside our context
+            // 防止路径超出根目录
             if (index == 0) {
                 return false;
             }
+            // 查找上一个'/'位置
             int index2 = -1;
             for (pos = start + index - 1; (pos >= 0) && (index2 < 0); pos--) {
                 if (b[pos] == (byte) '/') {
                     index2 = pos;
                 }
             }
+            // 移除"../"及其前面的路径部分
             copyBytes(b, start + index2, start + index + 3, end - start - index - 3);
             end = end + index2 - index - 3;
             uriBC.setEnd(end);
             index = index2;
         }
 
-        // If a slash was appended to help normalize "/." or "/.." then remove
-        // any trailing "/" from the result unless the result is "/".
+        // 如果之前添加了额外的'/'，且结果不是根路径，则移除尾部的'/'
         if (appendedSlash && end > 1 && b[end - 1] == '/') {
             uriBC.setEnd(end - 1);
         }
@@ -1217,42 +1056,38 @@ public class CoyoteAdapter implements Adapter {
 
 
     /**
-     * Copy an array of bytes to a different position. Used during normalization.
-     *
-     * @param b    The bytes that should be copied
-     * @param dest Destination offset
-     * @param src  Source offset
-     * @param len  Length
+     * 数组复制方法（用于URI规范化）
      */
     protected static void copyBytes(byte[] b, int dest, int src, int len) {
         System.arraycopy(b, src, b, dest, len);
     }
 
 
-    /*
-     * Examine URI segment by segment for 'suspicious' URIs.
+    /**
+     * 检查URI中是否包含可疑内容（如编码控制字符、非法路径等）
      */
     private static boolean checkSuspiciousURIs(ByteChunk undecodedURI) {
         byte[] bytes = undecodedURI.getBytes();
         int start = undecodedURI.getStart();
         int end = undecodedURI.getEnd();
 
-        // Find first segment
+        // 查找第一个路径段
         int segmentStart = undecodedURI.indexOf('/', 0);
         int segmentEnd = -1;
         if (segmentStart > -1) {
             segmentEnd = undecodedURI.indexOf('/', segmentStart + 1);
         }
 
+        // 逐段检查URI
         while (segmentStart > -1) {
             int pos = start + segmentStart + 1;
 
-            // Empty segment other than final segment with path parameters
+            // 检查空路径段（除了带路径参数的最后一段）
             if (segmentEnd > 0 && bytes[pos] == ';') {
                 return true;
             }
 
-            // encoded dot-segments and/or dot-segments with path parameters
+            // 检查编码的点段（如%2e）和带路径参数的点段
             int dotCount = 0;
             boolean encodedDot = false;
             while (pos < end) {
@@ -1260,7 +1095,7 @@ public class CoyoteAdapter implements Adapter {
                     dotCount++;
                     pos++;
                 } else if (pos + 2 < end && bytes[pos] == '%' && bytes[pos + 1] == '2' &&
-                        (bytes[pos + 2] == 'e' || bytes[pos + 2] == 'E')) {
+                    (bytes[pos + 2] == 'e' || bytes[pos + 2] == 'E')) {
                     encodedDot = true;
                     dotCount++;
                     pos += 3;
@@ -1280,7 +1115,7 @@ public class CoyoteAdapter implements Adapter {
                 return true;
             }
 
-            // %nn encoded controls or '/'
+            // 检查%nn编码的控制字符或'/'
             pos = start + segmentStart + 1;
             while (pos < end) {
                 if (pos + 2 < end && bytes[pos] == '%') {
@@ -1288,6 +1123,7 @@ public class CoyoteAdapter implements Adapter {
                     byte b2 = bytes[pos + 2];
                     pos += 3;
                     int decoded = (HexUtils.getDec(b1) << 4) + HexUtils.getDec(b2);
+                    // 检查是否为控制字符、删除字符或'/'
                     if (decoded < 20 || decoded == 0x7F || decoded == 0x2F) {
                         return true;
                     }
@@ -1296,7 +1132,7 @@ public class CoyoteAdapter implements Adapter {
                 }
             }
 
-            // Move to next segment
+            // 移动到下一个路径段
             if (segmentEnd == -1) {
                 segmentStart = -1;
             } else {
