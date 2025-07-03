@@ -475,6 +475,10 @@ public abstract class HttpServlet extends GenericServlet {
     /**
      * 服务方法的公共入口，转换请求响应类型后调用 protected service 方法
      *
+     * 对于spring而言调用到了
+     * DispatcherServlet.doGet/doPost() → DispatcherServlet.processRequest() →
+     * DispatcherServlet.doService()
+     *
      * @param req Servlet 请求对象
      * @param res Servlet 响应对象
      * @throws ServletException 请求处理异常

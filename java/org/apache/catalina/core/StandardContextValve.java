@@ -45,7 +45,7 @@ final class StandardContextValve extends ValveBase {
     /**
      * 核心请求处理方法
      * 实现逻辑：
-     * 1. 禁止对WEB-INF和META-INF目录的直接访问
+     * 1. 禁止对WEB-INF和META-INF目录的直接访问（确保 Web 应用的私有资源（如依赖 JAR 包）只能被服务器端代码加载，避免客户端绕过安全限制直接调用。）
      * 2. 从Request中获取目标Wrapper容器
      * 3. 若Wrapper不存在或不可用，返回HTTP 404错误
      * 4. 发送HTTP 100 Continue确认（如果客户端请求了）

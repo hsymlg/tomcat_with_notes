@@ -72,7 +72,7 @@ final class StandardWrapperValve extends ValveBase {
     // --------------------------------------------------------- Public Methods
 
     /**
-     * 核心请求处理方法（最终调用Servlet的service方法）
+     * 核心请求处理方法（最终调用Servlet的service方法）通过过滤器链（ApplicationFilterChain） 间接调用的Servlet的service方法
      * 实现逻辑：
      * 1. 检查Web应用和Servlet的可用性
      * 2. 分配Servlet实例（从Servlet容器中获取）

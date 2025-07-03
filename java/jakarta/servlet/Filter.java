@@ -1,105 +1,86 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本接口由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package jakarta.servlet;
 
 import java.io.IOException;
 
 /**
- * A filter is an object that performs filtering tasks on either the request to a resource (a servlet or static
- * content), or on the response from a resource, or both. <br>
- * <br>
- * Filters perform filtering in the <code>doFilter</code> method. Every Filter has access to a FilterConfig object from
- * which it can obtain its initialization parameters, a reference to the ServletContext which it can use, for example,
- * to load resources needed for filtering tasks.
- * <p>
- * Filters are configured in the deployment descriptor of a web application
- * <p>
- * Examples that have been identified for this design are<br>
- * 1) Authentication Filters <br>
- * 2) Logging and Auditing Filters <br>
- * 3) Image conversion Filters <br>
- * 4) Data compression Filters <br>
- * 5) Encryption Filters <br>
- * 6) Tokenizing Filters <br>
- * 7) Filters that trigger resource access events <br>
- * 8) XSL/T filters <br>
- * 9) Mime-type chain Filter <br>
+ * 过滤器接口（Servlet规范核心接口，实现面向切面编程的基础）
  *
- * @since Servlet 2.3
+ * 核心职责：
+ * 1. 定义过滤器的生命周期方法（init/destroy）
+ * 2. 定义请求响应过滤的核心方法（doFilter）
+ * 3. 提供访问过滤器配置和Servlet上下文的接口
+ *
+ * 应用场景：
+ * 1. 认证过滤器（Authentication Filters）
+ * 2. 日志与审计过滤器（Logging and Auditing Filters）
+ * 3. 图像转换过滤器（Image conversion Filters）
+ * 4. 数据压缩过滤器（Data compression Filters）
+ * 5. 加密过滤器（Encryption Filters）
+ * 6. 令牌化过滤器（Tokenizing Filters）
+ * 7. 资源访问事件触发器（Resource access event Filters）
+ * 8. XSL/T转换过滤器（XSL/T filters）
+ * 9. MIME类型链过滤器（Mime-type chain Filter）
+ *
+ * @since Servlet 2.3 规范（2001年引入）
  */
 public interface Filter {
 
     /**
-     * Called by the web container to indicate to a filter that it is being placed into service. The servlet container
-     * calls the init method exactly once after instantiating the filter. The init method must complete successfully
-     * before the filter is asked to do any filtering work.
-     * <p>
-     * The web container cannot place the filter into service if the init method either:
-     * <ul>
-     * <li>Throws a ServletException</li>
-     * <li>Does not return within a time period defined by the web container</li>
-     * </ul>
-     * The default implementation is a NO-OP.
+     * 过滤器初始化方法（容器启动时调用）
      *
-     * @param filterConfig The configuration information associated with the filter instance being initialised
+     * 调用时机：
+     * - 过滤器实例化后，首次处理请求前调用
+     * - 每个过滤器实例仅调用一次
      *
-     * @throws ServletException if the initialisation fails
+     * 实现要求：
+     * - 必须成功完成初始化才能处理请求
+     * - 若抛出ServletException或超时，容器将无法启用该过滤器
+     *
+     * @param filterConfig 过滤器配置对象（包含初始化参数和ServletContext引用）
+     * @throws ServletException 初始化失败时抛出
      */
     default void init(FilterConfig filterConfig) throws ServletException {
+        // 默认实现为空操作（NO-OP），子类可覆盖
     }
 
     /**
-     * The <code>doFilter</code> method of the Filter is called by the container each time a request/response pair is
-     * passed through the chain due to a client request for a resource at the end of the chain. The FilterChain passed
-     * in to this method allows the Filter to pass on the request and response to the next entity in the chain.
-     * <p>
-     * A typical implementation of this method would follow the following pattern:- <br>
-     * 1. Examine the request<br>
-     * 2. Optionally wrap the request object with a custom implementation to filter content or headers for input
-     * filtering <br>
-     * 3. Optionally wrap the response object with a custom implementation to filter content or headers for output
-     * filtering <br>
-     * 4. a) <strong>Either</strong> invoke the next entity in the chain using the FilterChain object
-     * (<code>chain.doFilter()</code>), <br>
-     * 4. b) <strong>or</strong> not pass on the request/response pair to the next entity in the filter chain to block
-     * the request processing<br>
-     * 5. Directly set headers on the response after invocation of the next entity in the filter chain.
+     * 过滤器核心处理方法（请求响应过滤的入口）
      *
-     * @param request  The request to process
-     * @param response The response associated with the request
-     * @param chain    Provides access to the next filter in the chain for this filter to pass the request and response
-     *                     to for further processing
+     * 处理逻辑模式：
+     * 1. 检查请求（Examine the request）
+     * 2. 可选：包装请求对象以过滤输入内容或头部
+     * 3. 可选：包装响应对象以过滤输出内容或头部
+     * 4. 选择：
+     *    a) 通过FilterChain调用下一个过滤器/资源（chain.doFilter()）
+     *    b) 阻止请求处理（不调用chain.doFilter()）
+     * 5. 可选：在调用后续组件后直接设置响应头部
      *
-     * @throws IOException      if an I/O error occurs during this filter's processing of the request
-     * @throws ServletException if the processing fails for any other reason
+     * @param request 当前请求对象（可被包装修改）
+     * @param response 当前响应对象（可被包装修改）
+     * @param chain 过滤器链对象（用于调用下一个过滤器或资源）
+     * @throws IOException 处理请求响应时发生I/O错误（如文件读写异常）
+     * @throws ServletException 处理请求响应时发生业务逻辑错误
      */
     void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-            throws IOException, ServletException;
+        throws IOException, ServletException;
 
     /**
-     * Called by the web container to indicate to a filter that it is being taken out of service. This method is only
-     * called once all threads within the filter's doFilter method have exited or after a timeout period has passed.
-     * After the web container calls this method, it will not call the doFilter method again on this instance of the
-     * filter. <br>
-     * <br>
-     * This method gives the filter an opportunity to clean up any resources that are being held (for example, memory,
-     * file handles, threads) and make sure that any persistent state is synchronized with the filter's current state in
-     * memory. The default implementation is a NO-OP.
+     * 过滤器销毁方法（容器关闭时调用）
+     *
+     * 调用时机：
+     * - 所有doFilter线程退出后或超时后调用
+     * - 调用后容器不再使用该过滤器实例
+     *
+     * 实现要求：
+     * - 释放持有的资源（内存、文件句柄、线程等）
+     * - 同步持久化状态（如有）
      */
     default void destroy() {
+        // 默认实现为空操作（NO-OP），子类可覆盖
     }
 }

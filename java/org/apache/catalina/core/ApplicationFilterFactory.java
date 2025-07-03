@@ -1,18 +1,7 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本类由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package org.apache.catalina.core;
 
@@ -30,134 +19,156 @@ import org.apache.tomcat.util.descriptor.web.FilterMap;
 import org.apache.tomcat.util.res.StringManager;
 
 /**
- * Factory for the creation and caching of Filters and creation of Filter Chains.
+ * 过滤器工厂类（创建过滤器链和管理过滤器缓存）
  *
- * @author Greg Murray
- * @author Remy Maucherat
+ * 核心职责：
+ * 1. 根据请求和Servlet创建对应的过滤器链
+ * 2. 匹配web.xml中定义的FilterMap规则
+ * 3. 管理过滤器实例的生命周期
+ * 4. 支持不同调度类型（FORWARD/INCLUDE等）的过滤器匹配
+ *
+ * 设计特点：
+ * - 工具类（私有构造函数），提供静态方法
+ * - 结合FilterMap规则实现过滤器的动态匹配
+ * - 支持过滤器链的复用（非安全模式下）
  */
 public final class ApplicationFilterFactory {
 
+    // 日志记录器和字符串资源管理器
     private static final Log log = LogFactory.getLog(ApplicationFilterFactory.class);
     private static final StringManager sm = StringManager.getManager(ApplicationFilterFactory.class);
 
+    // 私有构造函数，防止实例化（工具类）
     private ApplicationFilterFactory() {
-        // Prevent instance creation. This is a utility class.
+        // 防止实例创建，这是一个工具类
     }
 
-
     /**
-     * Construct a FilterChain implementation that will wrap the execution of the specified servlet instance.
+     * 创建并配置过滤器链（核心方法）
      *
-     * @param request The servlet request we are processing
-     * @param wrapper The wrapper managing the servlet instance
-     * @param servlet The servlet instance to be wrapped
-     *
-     * @return The configured FilterChain instance or null if none is to be executed.
+     * @param request  当前请求对象
+     * @param wrapper  Servlet包装器（Wrapper）
+     * @param servlet  Servlet实例
+     * @return 配置好的过滤器链，若无过滤器则返回null
      */
     public static ApplicationFilterChain createFilterChain(ServletRequest request, Wrapper wrapper, Servlet servlet) {
 
-        // If there is no servlet to execute, return null
+        // 若Servlet为null，直接返回null（无过滤器链）
         if (servlet == null) {
             return null;
         }
 
-        // Create and initialize a filter chain object
+        // ------------------------- 创建过滤器链实例 -------------------------
         ApplicationFilterChain filterChain;
         if (request instanceof Request) {
+            // 请求为Tomcat内部Request对象时
             Request req = (Request) request;
             if (Globals.IS_SECURITY_ENABLED) {
-                // Security: Do not recycle
+                // 安全模式下：不回收过滤器链，每次新建
                 filterChain = new ApplicationFilterChain();
             } else {
+                // 非安全模式下：从请求中获取已存在的过滤器链（支持复用）
                 filterChain = (ApplicationFilterChain) req.getFilterChain();
                 if (filterChain == null) {
+                    // 首次访问时创建新的过滤器链并绑定到请求
                     filterChain = new ApplicationFilterChain();
                     req.setFilterChain(filterChain);
                 }
             }
         } else {
-            // Request dispatcher in use
+            // 使用RequestDispatcher时（如转发/包含），新建过滤器链
             filterChain = new ApplicationFilterChain();
         }
 
-        filterChain.setServlet(servlet);
-        filterChain.setServletSupportsAsync(wrapper.isAsyncSupported());
+        // ------------------------- 初始化过滤器链属性 -------------------------
+        filterChain.setServlet(servlet);  // 设置目标Servlet
+        filterChain.setServletSupportsAsync(wrapper.isAsyncSupported());  // 设置Servlet异步支持状态
 
-        // Acquire the filter mappings for this Context
-        StandardContext context = (StandardContext) wrapper.getParent();
-        filterChain.setDispatcherWrapsSameObject(context.getDispatcherWrapsSameObject());
-        FilterMap[] filterMaps = context.findFilterMaps();
+        // ------------------------- 获取Context和FilterMap配置 -------------------------
+        StandardContext context = (StandardContext) wrapper.getParent();  // 获取所属的Context
+        filterChain.setDispatcherWrapsSameObject(context.getDispatcherWrapsSameObject());  // 设置调度器对象包装策略
+        FilterMap[] filterMaps = context.findFilterMaps();  // 获取Context中所有FilterMap配置
 
-        // If there are no filter mappings, we are done
+        // 若无FilterMap配置，直接返回空过滤器链
         if (filterMaps == null || filterMaps.length == 0) {
             return filterChain;
         }
 
-        // Acquire the information we will need to match filter mappings
-        DispatcherType dispatcher = (DispatcherType) request.getAttribute(Globals.DISPATCHER_TYPE_ATTR);
+        // ------------------------- 获取请求匹配所需信息 -------------------------
+        DispatcherType dispatcher = (DispatcherType) request.getAttribute(Globals.DISPATCHER_TYPE_ATTR);  // 获取调度类型
+        String requestPath = FilterUtil.getRequestPath(request);  // 获取请求路径
+        String servletName = wrapper.getName();  // 获取Servlet名称
 
-        String requestPath = FilterUtil.getRequestPath(request);
-
-        String servletName = wrapper.getName();
-
-        // Add the relevant path-mapped filters to this filter chain
+        // ------------------------- 匹配URL模式的过滤器 -------------------------
+        // 先处理按URL模式映射的过滤器
         for (FilterMap filterMap : filterMaps) {
             if (!matchDispatcher(filterMap, dispatcher)) {
+                // 调度类型不匹配，跳过
                 continue;
             }
             if (!FilterUtil.matchFiltersURL(filterMap, requestPath)) {
+                // URL模式不匹配，跳过
                 continue;
             }
+            // 根据FilterMap获取过滤器配置
             ApplicationFilterConfig filterConfig =
-                    (ApplicationFilterConfig) context.findFilterConfig(filterMap.getFilterName());
+                (ApplicationFilterConfig) context.findFilterConfig(filterMap.getFilterName());
             if (filterConfig == null) {
+                // 过滤器配置不存在，记录警告
                 log.warn(sm.getString("applicationFilterFactory.noFilterConfig", filterMap.getFilterName()));
                 continue;
             }
+            // 将过滤器添加到链中
             filterChain.addFilter(filterConfig);
         }
 
-        // Add filters that match on servlet name second
+        // ------------------------- 匹配Servlet名称的过滤器 -------------------------
+        // 再处理按Servlet名称映射的过滤器（优先级低于URL模式）
         for (FilterMap filterMap : filterMaps) {
             if (!matchDispatcher(filterMap, dispatcher)) {
+                // 调度类型不匹配，跳过
                 continue;
             }
             if (!matchFiltersServlet(filterMap, servletName)) {
+                // Servlet名称不匹配，跳过
                 continue;
             }
+            // 根据FilterMap获取过滤器配置
             ApplicationFilterConfig filterConfig =
-                    (ApplicationFilterConfig) context.findFilterConfig(filterMap.getFilterName());
+                (ApplicationFilterConfig) context.findFilterConfig(filterMap.getFilterName());
             if (filterConfig == null) {
+                // 过滤器配置不存在，记录警告
                 log.warn(sm.getString("applicationFilterFactory.noFilterConfig", filterMap.getFilterName()));
                 continue;
             }
+            // 将过滤器添加到链中
             filterChain.addFilter(filterConfig);
         }
 
-        // Return the completed filter chain
+        // 返回配置完成的过滤器链
         return filterChain;
     }
 
-
-    // -------------------------------------------------------- Private Methods
-
+    // -------------------------------------------------------- 私有辅助方法
 
     /**
-     * Return <code>true</code> if the specified servlet name matches the requirements of the specified filter mapping;
-     * otherwise return <code>false</code>.
+     * 检查过滤器映射是否匹配Servlet名称
      *
-     * @param filterMap   Filter mapping being checked
-     * @param servletName Servlet name being checked
+     * @param filterMap   过滤器映射配置
+     * @param servletName 目标Servlet名称
+     * @return 是否匹配
      */
     private static boolean matchFiltersServlet(FilterMap filterMap, String servletName) {
 
         if (servletName == null) {
+            // Servlet名称为空，不匹配
             return false;
         }
-        // Check the specific "*" special servlet name
+        // 检查是否匹配所有Servlet（web.xml中<servlet-name>*</servlet-name>）
         else if (filterMap.getMatchAllServletNames()) {
             return true;
         } else {
+            // 检查是否匹配具体的Servlet名称列表
             String[] servletNames = filterMap.getServletNames();
             for (String name : servletNames) {
                 if (servletName.equals(name)) {
@@ -166,15 +177,17 @@ public final class ApplicationFilterFactory {
             }
             return false;
         }
-
     }
 
-
     /**
-     * Convenience method which returns true if the dispatcher type matches the dispatcher types specified in the
-     * FilterMap
+     * 检查过滤器映射是否匹配调度类型（FORWARD/INCLUDE等）
+     *
+     * @param filterMap 过滤器映射配置
+     * @param type      调度类型
+     * @return 是否匹配
      */
     private static boolean matchDispatcher(FilterMap filterMap, DispatcherType type) {
+        // 根据不同调度类型检查FilterMap中的对应标志位
         switch (type) {
             case FORWARD:
                 if ((filterMap.getDispatcherMapping() & FilterMap.FORWARD) != 0) {

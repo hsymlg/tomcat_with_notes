@@ -1,44 +1,42 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本接口由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package jakarta.servlet;
 
 import java.io.IOException;
 
 /**
- * A FilterChain is an object provided by the servlet container to the developer giving a view into the invocation chain
- * of a filtered request for a resource. Filters use the FilterChain to invoke the next filter in the chain, or if the
- * calling filter is the last filter in the chain, to invoke the resource at the end of the chain.
+ * 过滤器链接口（Servlet规范核心接口）
  *
- * @see Filter
+ * 核心职责：
+ * 1. 定义过滤器之间的调用协议
+ * 2. 提供请求和响应在过滤器链中的传递机制
+ * 3. 控制过滤器链的执行流程（调用下一个过滤器或目标资源）
  *
- * @since Servlet 2.3
+ * 设计理念：
+ * - 责任链模式的标准接口定义
+ * - 解耦过滤器与具体执行逻辑
+ * - 支持过滤器链的动态扩展
+ *
+ * @see Filter 过滤器接口
+ * @since Servlet 2.3 规范（2001年引入）
  */
 public interface FilterChain {
 
     /**
-     * Causes the next filter in the chain to be invoked, or if the calling filter is the last filter in the chain,
-     * causes the resource at the end of the chain to be invoked.
+     * 执行过滤器链的下一个环节
      *
-     * @param request  the request to pass along the chain.
-     * @param response the response to pass along the chain.
+     * 调用逻辑：
+     * 1. 若当前过滤器不是链中最后一个，调用下一个过滤器的doFilter方法
+     * 2. 若当前过滤器是最后一个，调用目标资源（Servlet/JSP）的service方法
      *
-     * @throws IOException      if an I/O error occurs during the processing of the request
-     * @throws ServletException if the processing fails for any other reason
+     * @param request  当前请求对象（可被过滤器修改）
+     * @param response 当前响应对象（可被过滤器修改）
+     *
+     * @throws IOException      处理请求时发生I/O错误（如网络异常）
+     * @throws ServletException 处理请求时发生Servlet异常（如业务逻辑错误）
      */
     void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException;
-
 }

@@ -31,7 +31,8 @@ import org.apache.tomcat.util.res.StringManager;
  *
  * 每个容器（如 Host）有独立的Pipeline-Valve链
  * 请求会按容器层级依次经过各层责任链
- * 浏览器请求 → Engine Pipeline → Host Pipeline → Context Pipeline → Wrapper Pipeline → Servlet
+ * 浏览器请求 → Engine Pipeline → Host Pipeline → Context Pipeline → Wrapper Pipeline → Servlet   （容器层级传递，非设计模式，属于容器架构层级关系）
+ * 最终在StandardWrapperValve的过滤器链（ApplicationFilterChain） 间接调用的Servlet的service方法
  *
  * 责任链的典型应用场景
  * 请求预处理：如AccessLogValve记录访问日志，SecurityValve进行权限校验

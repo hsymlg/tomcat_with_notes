@@ -1,65 +1,57 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 版权声明：本接口由Apache软件基金会（ASF）授权，采用Apache License 2.0协议
+ * 许可说明：未经许可不得使用，如需使用需遵守许可证中的条款
+ * 版权信息：贡献者版权协议通过NOTICE文件分发，具体版权归属见该文件
  */
 package jakarta.servlet;
 
 import java.util.Enumeration;
 
 /**
- * A filter configuration object used by a servlet container to pass information to a filter during initialization.
+ * 过滤器配置接口（Servlet容器用于在过滤器初始化时传递配置信息）
  *
- * @see Filter
+ * 核心职责：
+ * 1. 提供过滤器的基本信息（名称）
+ * 2. 暴露ServletContext接口（访问容器上下文）
+ * 3. 提供初始化参数的访问接口
  *
- * @since Servlet 2.3
+ * 设计理念：
+ * - 解耦过滤器与容器的具体实现
+ * - 规范过滤器获取配置信息的标准接口
+ * - 支持过滤器在初始化时获取必要的配置参数
+ *
+ * @see Filter 过滤器接口（与本接口配合使用）
+ * @since Servlet 2.3 规范（2001年引入）
  */
 public interface FilterConfig {
 
     /**
-     * Get the name of the filter.
+     * 获取过滤器名称（由部署描述符中配置的filter-name决定）
      *
-     * @return The filter-name of this filter as defined in the deployment descriptor.
+     * @return 过滤器在web.xml中配置的名称
      */
     String getFilterName();
 
     /**
-     * Returns a reference to the {@link ServletContext} in which the caller is executing.
+     * 获取ServletContext实例（过滤器通过此接口访问容器环境）
      *
-     * @return {@link ServletContext} object, used by the caller to interact with its servlet container
-     *
-     * @see ServletContext
+     * @return 当前过滤器所属的ServletContext对象
+     * @see ServletContext Servlet上下文接口（提供容器环境访问）
      */
     ServletContext getServletContext();
 
     /**
-     * Returns a <code>String</code> containing the value of the named initialization parameter, or <code>null</code> if
-     * the parameter does not exist.
+     * 获取过滤器初始化参数值（由部署描述符中filter-init-param配置）
      *
-     * @param name <code>String</code> specifying the name of the initialization parameter
-     *
-     * @return <code>String</code> containing the value of the initialization parameter
+     * @param name 初始化参数的名称
+     * @return 参数对应的值，若参数不存在则返回null
      */
     String getInitParameter(String name);
 
     /**
-     * Returns the names of the filter's initialization parameters as an <code>Enumeration</code> of <code>String</code>
-     * objects, or an empty <code>Enumeration</code> if the filter has no initialization parameters.
+     * 获取所有初始化参数名称的枚举（用于遍历过滤器的所有初始化参数）
      *
-     * @return <code>Enumeration</code> of <code>String</code> objects containing the names of the filter's
-     *             initialization parameters
+     * @return 包含所有初始化参数名称的Enumeration，若无参数则返回空枚举
      */
     Enumeration<String> getInitParameterNames();
-
 }
